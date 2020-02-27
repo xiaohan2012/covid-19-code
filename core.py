@@ -6,27 +6,36 @@ from helpers import  pr_EI_long, pr_MO_long, pr_IM_long
 from const import *
 
 
-def do_simulation(        
+def do_simulation(
         total_days, bed_info,
         params, verbose=0
 ):
+    """
+    total_days: total number of days to simulate
+    bed_info: list of tuples (time T,  number of new  beds at T)
+    params: a Params object
+    """
+    # T=0 is the day before simulation
     pr_EI = partial(pr_EI_long, mu_ei=params.mu_ei, k=params.k_days)
     pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
     pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
 
-    data = np.zeros((total_days, NUM_STATES), dtype=float)
+    data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     data[0, STATE.S] = params.total_population
     data[0, STATE.E] = params.initial_num_E
+    data[0, STATE.I] = params.initial_num_I
 
     # the ith row means data[i, state] - data[i-1, state]
-    delta_data = np.zeros((total_days, NUM_STATES), dtype=float)
+    delta_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     delta_data[0, STATE.S] = params.total_population
     delta_data[0, STATE.E] = params.initial_num_E
+    delta_data[0, STATE.I] = params.initial_num_I
 
     # the number of increaset of each state per day
-    increase_data = np.zeros((total_days, NUM_STATES), dtype=float)
+    increase_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     increase_data[0, STATE.S] = params.total_population
     increase_data[0, STATE.E] = params.initial_num_E
+    increase_data[0, STATE.I] = params.initial_num_I
 
     for T, num in bed_info:
         delta_data[T, STATE.H] = num
@@ -35,9 +44,10 @@ def do_simulation(
     data[:, STATE.H] = np.cumsum(increase_data[:, STATE.H])
 
     # dynamic array
-    num_in_I = np.zeros((total_days), dtype=float)
+    num_in_I = np.zeros((total_days+1), dtype=float)
+    num_in_I[0] = params.initial_num_I
 
-    for T in range(1, total_days):
+    for T in range(1, total_days+1):
         if verbose > 0:
             print('-' * 10)
             print(f'at iteration {T}')
@@ -89,8 +99,8 @@ def do_simulation(
         increase_data[T, STATE.E] = S2E
         increase_data[T, STATE.I] = E2I
 
-        # some patients need to stay at home 
-        # when there are more people that needs to go to hospital than the hospital capacity    
+        # some patients need to stay at home
+        # when there are more people that needs to go to hospital than the hospital capacity
         remaining_hospital_capacity = data[T-1, STATE.H] - data[T-1, STATE.M]
         if (I2M - M2O) >= remaining_hospital_capacity:
             I2M = remaining_hospital_capacity + M2O
@@ -105,7 +115,7 @@ def do_simulation(
         num_in_I[T-np.array(day_offsets, dtype=int)] -= I2M_array
 
         for trans, v in zip(('S->E', 'E->I', 'I->O', 'I->M', 'M->O'), (S2E, E2I, I2O, I2M, M2O)):
-            assert v >= 0
+            assert v >= 0, f'{trans}: {v}'
             if verbose > 0:
                 print(f'{trans}: {v}')
 
@@ -130,8 +140,8 @@ def do_simulation(
                 print(f'{s}: {v}')
             print(data[T, :].sum())
 
-        assert np.isclose(data[T, :].sum(), data[0, :].sum()), \
-            '{} != {}'.format(data[T, :].sum(), data[0, :].sum())
+        assert np.isclose(data[T, :-1].sum(), data[0, :-1].sum()), \
+            '{} != {}'.format(data[T, :-1].sum(), data[0, :-1].sum())
 
         assert data[T, STATE.M] <= data[T, STATE.H]
 

@@ -1,6 +1,6 @@
-STATES = ('S', 'E', 'I', 'M', 'H', 'O')
+STATES = ('S', 'E', 'I', 'M', 'O', 'H')
 NUM_STATES = len(STATES)
-COLORS = ['green', 'orange', 'red', 'pink', 'blue', 'gray']
+COLORS = ['green', 'orange', 'red', 'pink', 'gray', 'blue']
 
 
 class STATE:
@@ -8,5 +8,5 @@ class STATE:
     E = 1  # exposed without symptom
     I = 2  # infected and with symptom
     M = 3  # with medical care
-    H = 4  # maximum number of beds in hospital
-    O = 5  # out of system
+    O = 4  # out of system, dead  or cured
+    H = 5  # maximum number of beds in hospital

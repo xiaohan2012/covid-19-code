@@ -46,3 +46,38 @@ def pr_EI_long(t, mu_ei, k):
 def pr_MO_long(t, mu_mo, k):
     assert t >= 1
     return truncated_poisson(t, mu_mo, 1, k)
+
+
+class Params:
+    def __init__(
+            self,
+            # infection-related parameters:
+            alpha=0.02, beta=0.01, mu_ei=5.2, mu_mo=10, x0_pt=10000,  k_pt=0.0001,
+            k_days=14,
+            # city-related
+            total_population=9000000,
+            initial_num_E=100,
+            initial_num_I=20
+        ):
+
+        self.total_population = total_population
+        self.initial_num_E = initial_num_E
+        self.initial_num_I = initial_num_I
+        
+        # probability  parameters
+        # S -> E
+        self.alpha = alpha
+        self.beta  = beta
+        
+        # E -> I: Poisson
+        self.mu_ei = mu_ei
+        
+        # I -> M: geoemtric
+        self.x0_pt = x0_pt
+        self.k_pt = k_pt
+        
+        # M -> O: Poisson
+        self.mu_mo = mu_mo
+
+        # time window size
+        self.k_days = k_days
