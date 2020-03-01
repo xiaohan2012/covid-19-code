@@ -53,19 +53,24 @@ def pr_MO_long(t, mu_mo, k):
     assert t >= 1
     return truncated_poisson(t, mu_mo, 1, k)
 
+
 class Params:
     def __init__(
             self,
             # infection-related parameters:
-            alpha=0.02, beta=0.01, mu_ei=5.2, mu_mo=10, x0_pt=10000,  k_pt=0.0001,
-            k_days=14,
+            alpha=0.02, beta=0.01,
+            mu_ei=6.0,
+            mu_mo=14.0,
+            x0_pt=10000, k_pt=0.0001,
+            k_days=28,
             # city-related
             total_population=9000000,
             initial_num_E=100,
             initial_num_I=20,
-            initial_num_M=0
+            initial_num_M=0,
+            stages=None
         ):
-
+        
         self.total_population = total_population
         self.initial_num_E = initial_num_E
         self.initial_num_I = initial_num_I
@@ -75,6 +80,9 @@ class Params:
 
         self.alpha = alpha
         self.beta = beta
+
+        self.alpha_array = None
+        self.beta_array = None
         
         # E -> I: Poisson
         self.mu_ei = mu_ei
@@ -89,16 +97,54 @@ class Params:
         # time window size
         self.k_days = k_days
 
+        self.stages = stages
+        self.num_stages = 1 if stages is None else (len(stages) + 1)
+
+    def get_stage_num(self, t):
+        if self.stages is None:
+            return 0
+        else:
+            for i, time in enumerate(self.stages):
+                assert time > 0
+                if t < time:
+                    return i
+            return self.num_stages - 1
+    
+    def populate_alpha_array(self):
+        times = np.array([t for t, _ in self.alpha])
+        values = np.array([v for _, v in self.alpha])
+        
+        max_t = times.max()
+        self.alpha_array = np.zeros(max_t+1)
+        for value, t1, t2 in zip(values[:-1], times[:-1], times[1:]):
+            for i in range(t1, t2):
+                self.alpha_array[i] = value
+        self.alpha_array[max_t:] = values[-1]
+        # print(self.alpha_array)
+        
+    def populate_beta_array(self):
+        times = np.array([t for t, _ in self.beta])
+        values = np.array([v for _, v in self.beta])
+        
+        max_t = times.max()
+        self.beta_array = np.zeros(max_t+1)
+        for value, t1, t2 in zip(values[:-1], times[:-1], times[1:]):
+            for i in range(t1, t2):
+                self.beta_array[i] = value
+        self.beta_array[max_t:] = values[-1]
+        # print(self.beta_array)
+        
     def alpha_func(self, t):
         if isinstance(self.alpha, float):
             return self.alpha
         elif isinstance(self.alpha, list):
-            assert len(self.alpha) == 2
-            (t1, alpha1), (t2, alpha2) = self.alpha
-            if ((t >= t1) and (t < t2)):
-                return alpha1
+            if self.alpha_array is None:
+                self.populate_alpha_array()
+                
+            if t >= len(self.alpha_array):
+                return self.alpha_array[-1]
             else:
-                return alpha2
+                return self.alpha_array[t]
         else:
             raise ValueError(f'cannot understand: {self.alpha}')
 
@@ -106,15 +152,28 @@ class Params:
         if isinstance(self.beta, float):
             return self.beta
         elif isinstance(self.beta, list):
-            assert len(self.beta) == 2
-            (t1, beta1), (t2, beta2) = self.beta
-            if ((t >= t1) and (t < t2)):
-                return beta1
+            if self.beta_array is None:
+                self.populate_beta_array()
+                
+            if t >= len(self.beta_array):
+                return self.beta_array[-1]
             else:
-                return beta2
+                return self.beta_array[t]
         else:
             raise ValueError(f'cannot understand: {self.beta}')
-        
+
+    def get_alpha_beta_by_stage(self, s):
+        assert s < self.num_stages
+        if self.num_stages == 1:
+            return self.alpha, self.beta
+
+        if s == self.num_stages - 1:
+            t = self.stages[-1]
+        else:
+            t = self.stages[s] - 1
+
+        return self.alpha_func(t), self.beta_func(t)
+    
     def __repr__(self):
         return f"""total_population: {self.total_population}
 initial_num_E: {self.initial_num_E}
