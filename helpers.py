@@ -1,11 +1,15 @@
 import pandas as pd
 import numpy as np
+import seaborn as sbn
+import matplotlib as mpl
+
 from datetime import datetime, timedelta
 from scipy.stats import poisson
 from matplotlib import pyplot as plt
 
 from const import STATE, STATES, NUM_STATES, COLORS
 
+mpl.style.use('paper')
 
 DATE_FORMAT = '%d/%m/%Y'
 
@@ -227,7 +231,7 @@ def plot_total(total):
     return fig, ax
 
 
-def total_to_csv(p0_time, total_days, total, path):
+def data2df(total, p0_time, total_days):
     df = pd.DataFrame.from_dict({
         'date': pd.date_range(p0_time, p0_time+timedelta(days=total_days)),
         'S': total[:, STATE.S],
@@ -237,4 +241,57 @@ def total_to_csv(p0_time, total_days, total, path):
         'O': total[:, STATE.O],
         'H': total[:, STATE.H]
     })
+    return df
+
+
+def total_to_csv(p0_time, total_days, total, path):
+    df = data2df(total, p0_time, total_days)
     df.to_csv(path, index=None)
+
+
+def plot_total(total, p0_time, total_days):
+    sbn.set_style("whitegrid")
+    
+    def np_to_dt(d):
+        return pd.to_datetime(str(d))
+    
+    df = data2df(total, p0_time, total_days)
+    df['date_str'] = df['date'].apply(lambda d: np_to_dt(d).strftime('%d/%m/%y'))
+
+    def process_state(state):
+        subdf = df[['date', state]]
+        subdf['index'] = df.index
+        subdf['value'] = subdf[state].copy()
+        del subdf[state]
+        subdf['state'] = state
+        return subdf
+
+    # S = process_state('S')
+    E = process_state('E')
+    I = process_state('I')
+    M = process_state('M')
+    O = process_state('O')
+    H = process_state('H')
+    ndf = pd.concat([E, I, M, O, H], ignore_index=True)
+
+    nticks = 5
+    step = int(np.floor(df.shape[0] / nticks))
+
+    xticks = df['date_str'].index[::step].values
+    xtick_labels = df['date_str'][::step].values
+    print(xtick_labels)
+
+    fig, ax = plt.subplots(1, 1)
+    stuff = sbn.lineplot(
+        x="index", y="value", hue='state', data=ndf, ax=ax,
+        palette=['orange', 'red', 'pink', 'gray', 'blue'],
+        legend=None
+    )
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xtick_labels, rotation=15)
+    ax.set_xlabel('date')
+    ax.ticklabel_format(axis="y", style="sci", scilimits=(0,  0))
+    ax.legend(stuff.lines, ['E', 'I', 'M', 'O', 'H'], loc='best')
+    fig.tight_layout()
+
+    return fig, ax
