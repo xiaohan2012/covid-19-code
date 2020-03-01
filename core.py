@@ -1,6 +1,7 @@
 
 import numpy as np
 from functools import partial
+from tqdm import tqdm
 
 from helpers import  pr_EI_long, pr_MO_long, pr_IM_long
 from const import *
@@ -20,23 +21,29 @@ def do_simulation(
     pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
     pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
 
+    E2I_by_days = np.zeros(params.k_days)  # ith element  correponds to i+1 day
+    I2OM_by_days = np.zeros(params.k_days + 1)
+    
     data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     data[0, STATE.S] = params.total_population
     data[0, STATE.E] = params.initial_num_E
     data[0, STATE.I] = params.initial_num_I
+    data[0, STATE.M] = params.initial_num_M
 
     # the ith row means data[i, state] - data[i-1, state]
     delta_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     delta_data[0, STATE.S] = params.total_population
     delta_data[0, STATE.E] = params.initial_num_E
     delta_data[0, STATE.I] = params.initial_num_I
-
+    delta_data[0, STATE.M] = params.initial_num_M
+    
     # the number of increaset of each state per day
     increase_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     increase_data[0, STATE.S] = params.total_population
     increase_data[0, STATE.E] = params.initial_num_E
     increase_data[0, STATE.I] = params.initial_num_I
-
+    increase_data[0, STATE.M] = params.initial_num_M
+    
     for T, num in bed_info:
         delta_data[T, STATE.H] = num
         increase_data[T, STATE.H] = num
@@ -47,13 +54,13 @@ def do_simulation(
     num_in_I = np.zeros((total_days+1), dtype=float)
     num_in_I[0] = params.initial_num_I
 
-    for T in range(1, total_days+1):
+    for T in tqdm(range(1, total_days+1)):
         if verbose > 0:
             print('-' * 10)
             print(f'at iteration {T}')
 
-        inf_proba_E = min(1, data[T-1, STATE.E] * params.alpha)
-        inf_proba_I = min(1, data[T-1, STATE.I] * params.beta)
+        inf_proba_E = min(1, data[T-1, STATE.E] * params.alpha_func(T-1))
+        inf_proba_I = min(1, data[T-1, STATE.I] * params.beta_func(T-1))
 
         if np.isclose(inf_proba_E, 0):
             inf_proba_E = 0
@@ -65,16 +72,18 @@ def do_simulation(
 
         assert inf_proba_E >= 0, inf_proba_E
         assert inf_proba_I >= 0, inf_proba_I
-        assert inf_proba_E <= 1, (data[T-1, STATE.E], params.alpha, inf_proba_E)
-        assert inf_proba_I <= 1, (data[T-1, STATE.I], params.beta,  inf_proba_I)
+        assert inf_proba_E <= 1, (data[T-1, STATE.E], params.alpha_func(T-1), inf_proba_E)
+        assert inf_proba_I <= 1, (data[T-1, STATE.I], params.beta_func(T-1),  inf_proba_I)
         assert inf_proba <= 1
 
         day_offsets = [t for t in range(1, params.k_days+1) if T - t >= 0]
 
         S2E = (data[T-1, STATE.S] * inf_proba)
 
-        E2I = np.sum([pr_EI(t) * increase_data[T-t, STATE.E] for t in day_offsets])
-
+        E2I_array = [pr_EI(t) * increase_data[T-t, STATE.E] for t in day_offsets]
+        
+        E2I = np.sum(E2I_array)
+        
         # remaining I exceeding k days go to O
         if T-params.k_days-1 >= 0:
             I2O = num_in_I[T-params.k_days-1]
@@ -115,6 +124,8 @@ def do_simulation(
         num_in_I[T-np.array(day_offsets, dtype=int)] -= I2M_array
 
         for trans, v in zip(('S->E', 'E->I', 'I->O', 'I->M', 'M->O'), (S2E, E2I, I2O, I2M, M2O)):
+            if np.isclose(v, 0):
+                v = 0
             assert v >= 0, f'{trans}: {v}'
             if verbose > 0:
                 print(f'{trans}: {v}')
@@ -123,6 +134,11 @@ def do_simulation(
             assert not np.isnan(v)
             assert not np.isinf(v)
 
+        # print(E2I_by_days, E2I_array)  # 
+        E2I_by_days[:len(E2I_array)] += E2I_array
+        I2OM_by_days[:len(I2M_array)] += I2M_array
+        I2OM_by_days[-1] += I2O
+        
         delta_S = -S2E
         delta_E = S2E - E2I
         delta_I = E2I - I2M - I2O
@@ -154,4 +170,8 @@ def do_simulation(
         delta_data[T, STATE.M] = delta_M
         delta_data[T, STATE.O] = delta_O
 
-    return data, delta_data, increase_data
+    aux = dict(
+        I2OM_by_days=I2OM_by_days,
+        E2I_by_days=E2I_by_days
+    )
+    return data, delta_data, increase_data, aux
