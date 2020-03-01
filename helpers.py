@@ -139,15 +139,15 @@ def T(s):
     return datetime.strptime(s, DATE_FORMAT)
 
 
-def get_T1_and_T2(aux):
+def get_T1_and_T2(I2OM_by_days, E2I_by_days):
     I_num_and_day_array = np.array(
-        [[num, d] for num, d in zip(aux['I2OM_by_days'], range(1, len(aux['I2OM_by_days']) + 1))]
+        [[num, d] for num, d in zip(I2OM_by_days, range(1, len(I2OM_by_days) + 1))]
     )
     total_num_I = I_num_and_day_array[:, 0].sum()
     mean_I_days = (I_num_and_day_array[:, 0] * I_num_and_day_array[:, 1]).sum() / total_num_I
     
     E_num_and_day_array = np.array(
-        [[num, d] for num, d in zip(aux['E2I_by_days'], range(1, len(aux['E2I_by_days']) + 1))]
+        [[num, d] for num, d in zip(E2I_by_days, range(1, len(E2I_by_days) + 1))]
     )
     total_num_E = E_num_and_day_array[:, 0].sum()
     mean_E_days = (E_num_and_day_array[:, 0] * E_num_and_day_array[:, 1]).sum() / total_num_E

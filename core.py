@@ -3,13 +3,15 @@ import numpy as np
 from functools import partial
 from tqdm import tqdm
 
-from helpers import  pr_EI_long, pr_MO_long, pr_IM_long
+from helpers import  pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
 from const import *
 
 
 def do_simulation(
         total_days, bed_info,
-        params, verbose=0
+        params,
+        lockdown_day=-1,
+        verbose=0
 ):
     """
     total_days: total number of days to simulate
@@ -21,8 +23,14 @@ def do_simulation(
     pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
     pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
 
-    E2I_by_days = np.zeros(params.k_days)  # ith element  correponds to i+1 day
-    I2OM_by_days = np.zeros(params.k_days + 1)
+    if lockdown_day < 0:
+        E2I_by_days = np.zeros(params.k_days)  # ith element  correponds to i+1 day
+        I2OM_by_days = np.zeros(params.k_days + 1)
+    else:
+        E2I_by_days_before_ld = np.zeros(params.k_days)
+        I2OM_by_days_before_ld = np.zeros(params.k_days + 1)
+        E2I_by_days_after_ld = np.zeros(params.k_days)
+        I2OM_by_days_after_ld = np.zeros(params.k_days + 1)
     
     data = np.zeros((total_days+1, NUM_STATES), dtype=float)
     data[0, STATE.S] = params.total_population
@@ -134,11 +142,21 @@ def do_simulation(
             assert not np.isnan(v)
             assert not np.isinf(v)
 
-        # print(E2I_by_days, E2I_array)  # 
-        E2I_by_days[:len(E2I_array)] += E2I_array
-        I2OM_by_days[:len(I2M_array)] += I2M_array
-        I2OM_by_days[-1] += I2O
-        
+        # print(E2I_by_days, E2I_array)
+        if lockdown_day < 0:
+            E2I_by_days[:len(E2I_array)] += E2I_array
+            I2OM_by_days[:len(I2M_array)] += I2M_array
+            I2OM_by_days[-1] += I2O
+        else:
+            if T < lockdown_day:
+                E2I_by_days_before_ld[:len(E2I_array)] += E2I_array
+                I2OM_by_days_before_ld[:len(I2M_array)] += I2M_array
+                I2OM_by_days_before_ld[-1] += I2O
+            else:
+                E2I_by_days_after_ld[:len(E2I_array)] += E2I_array
+                I2OM_by_days_after_ld[:len(I2M_array)] += I2M_array
+                I2OM_by_days_after_ld[-1] += I2O
+                
         delta_S = -S2E
         delta_E = S2E - E2I
         delta_I = E2I - I2M - I2O
@@ -170,8 +188,17 @@ def do_simulation(
         delta_data[T, STATE.M] = delta_M
         delta_data[T, STATE.O] = delta_O
 
-    aux = dict(
-        I2OM_by_days=I2OM_by_days,
-        E2I_by_days=E2I_by_days
-    )
+    aux = dict()
+    if lockdown_day < 0:
+        T1, T2 = get_T1_and_T2(I2OM_by_days, E2I_by_days)
+        r0 = R0(params.total_population, params.alpha, params.beta, T1, T2)
+        aux['R0_info'] = (T1, T2, r0)
+    else:
+        T1_before, T2_before = get_T1_and_T2(I2OM_by_days_before_ld, E2I_by_days_before_ld)
+        T1_after, T2_after = get_T1_and_T2(I2OM_by_days_after_ld, E2I_by_days_after_ld)
+        r0_before = R0(params.total_population, params.alpha[0][1], params.beta[0][1], T1_before, T2_before)
+        r0_after = R0(params.total_population, params.alpha[1][1], params.beta[1][1], T1_after, T2_after)
+        aux['R0_info_before_ld'] = (T1_before, T2_before, r0_before)
+        aux['R0_info_after_ld'] = (T1_after, T2_after, r0_after)
+
     return data, delta_data, increase_data, aux
