@@ -1,6 +1,7 @@
 
 import numpy as np
 from functools import partial
+from datetime import  datetime, timedelta
 from tqdm import tqdm
 
 from helpers import  pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
@@ -10,6 +11,7 @@ from const import *
 def do_simulation(
         total_days, bed_info,
         params,
+        p0_time,
         verbose=0
 ):
     """
@@ -56,6 +58,7 @@ def do_simulation(
     num_in_I = np.zeros((total_days+1), dtype=float)
     num_in_I[0] = params.initial_num_I
 
+    end_time = None
     for T in tqdm(range(1, total_days+1)):
         if verbose > 0:
             print('-' * 10)
@@ -173,11 +176,73 @@ def do_simulation(
         delta_data[T, STATE.M] = delta_M
         delta_data[T, STATE.O] = delta_O
 
+        total_infected = data[T, [STATE.M, STATE.E, STATE.I, STATE.O]].sum()
+        O_fraction = (data[T, STATE.O] / total_infected)
+        if O_fraction >= 0.99:
+            end_time = T
+            print(f'O fraction  {O_fraction}')
+            # fraction of out-of-system exceeds 0.99
+            # the simulation can stop
+            # all states fixed
+            if (T+1) < data.shape[0]:
+                for s in range(NUM_STATES):
+                    data[T+1:, s] = data[T, s]
+            break
+
+    def plus_time_and_to_string(days):
+        return (p0_time + timedelta(days=int(days))).strftime('%d/%m/%y')
+    
+    stats = dict()
     R0_by_stage = dict()
     for s in range(num_stages):
         T1, T2 = get_T1_and_T2(I2OM_by_days_by_stage[s], E2I_by_days_by_stage[s])
         alpha, beta = params.get_alpha_beta_by_stage(s)
         r0 = R0(params.total_population, alpha, beta, T1, T2)
-        R0_by_stage[s] = (T1, T2, r0)
+        R0_by_stage[s] = (float(T1), float(T2), float(r0))
+    stats['R0_by_stage'] = R0_by_stage
+    if end_time:
+        stats['end_time'] = (int(end_time), plus_time_and_to_string(end_time))
+    else:
+        stats['end_time'] = None
+    peak_time = (data[:, STATE.M] + data[:, STATE.I]).argmax()
+    stats['peak_time'] = (int(peak_time), plus_time_and_to_string(peak_time))
+    
+    O = data[:, STATE.O]
+    IM = data[:, STATE.I] + data[:, STATE.M]
+    IME = IM + data[:, STATE.E]
 
-    return data, delta_data, increase_data, R0_by_stage
+    try:
+        when_dO_gt_dI = (increase_data[:, STATE.O] > increase_data[:, STATE.I]).nonzero()[0].min()
+    except ValueError:
+        when_dO_gt_dI = None
+
+    try:
+        when_dO_gt_dE = (increase_data[:, STATE.O] > increase_data[:, STATE.E]).nonzero()[0].min()
+    except ValueError:
+        when_dO_gt_dE = None
+
+    try:
+        turning_time_real = (O > IM).nonzero()[0].min()
+    except ValueError:
+        turning_time_real = None
+
+    try:
+        turning_time_theory = (O > IME).nonzero()[0].min()
+    except ValueError:
+        turning_time_theory = None
+
+    stats['when_dO_gt_dI'] = ((int(when_dO_gt_dI), plus_time_and_to_string(when_dO_gt_dI))
+                              if when_dO_gt_dI is not None
+                              else None)
+    stats['when_dO_gt_dE'] = ((int(when_dO_gt_dE), plus_time_and_to_string(when_dO_gt_dE))
+                              if when_dO_gt_dE is not None
+                              else None)
+
+    stats['turning_time_real'] = ((int(turning_time_real), plus_time_and_to_string(turning_time_real))
+                                  if turning_time_real is not None
+                                  else None)
+    stats['turning_time_theory'] = ((int(turning_time_theory), plus_time_and_to_string(turning_time_theory))
+                                    if turning_time_theory is not None
+                                    else None)
+    
+    return data, delta_data, increase_data, stats

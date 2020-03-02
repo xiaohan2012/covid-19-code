@@ -1,3 +1,5 @@
+import json
+import os
 import pandas as pd
 import numpy as np
 import seaborn as sbn
@@ -244,6 +246,13 @@ def data2df(total, p0_time, total_days):
     return df
 
 
+def enhance_total(df):
+    df['EIMO'] = df['E'] + df['I'] + df['M'] + df['O']
+    df['IMO'] = df['I'] + df['M'] + df['O']
+    df['IM'] = df['I'] + df['M']
+    return df
+
+
 def total_to_csv(p0_time, total_days, total, path):
     df = data2df(total, p0_time, total_days)
     df.to_csv(path, index=None)
@@ -295,3 +304,20 @@ def plot_total(total, p0_time, total_days):
     fig.tight_layout()
 
     return fig, ax
+
+
+def save_to_json(obj, path):
+    s = json.dumps(obj, indent=4, sort_keys=True)
+    with open(path, 'w') as f:
+        f.write(s)
+
+
+def save_bundle(bundle, p0_time, total_days, dir_name):
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+    names = ['total', 'delta', 'increase']
+    for d, name in zip(bundle, names):
+        df = data2df(d, p0_time, total_days)
+        if name == 'total':
+            df = enhance_total(df)
+        df.to_csv(f'{dir_name}/{name}.csv', index=None)
