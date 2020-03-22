@@ -5,7 +5,7 @@
 The following notebooks can be used to reproduce the experiments described in the paper submission:
 
 - `parameter_fitting.ipynb`: parameter tuning (infection coefficient, etc)
-- `patient-zero.ipynb`: inferring patient-zero
+- `patient-zero.ipynb`: inferring the date when patient-zero occurred
 - `start2end.ipynb`: from patient-zero time to the end (epidemic fully under control)
 - `delay-or-advance-lockdown.ipynb`: effect of delaying or advancing lockdown date
 - `varying-bed-numbers.ipynb`: effect of varying number of beds
