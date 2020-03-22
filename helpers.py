@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from scipy.stats import poisson
 from matplotlib import pyplot as plt
 
-from const import STATE, STATES, NUM_STATES, COLORS
+from const import STATE, STATES, NUM_STATES, COLORS, TRANS
 
 mpl.style.use('paper')
 
@@ -233,6 +233,19 @@ def plot_total(total):
     return fig, ax
 
 
+def trans2df(trans, p0_time, total_days):
+    df = pd.DataFrame.from_dict({
+        'date': pd.date_range(p0_time, p0_time+timedelta(days=total_days)),
+        'S2E':  trans[:, TRANS.S2E],
+        'E2I':  trans[:, TRANS.E2I],
+        'I2M':  trans[:, TRANS.I2M],
+        'M2O':  trans[:, TRANS.M2O],
+        'EbyE': trans[:, TRANS.EbyE],
+        'EbyI': trans[:, TRANS.EbyI]
+    })
+    return df
+
+
 def data2df(total, p0_time, total_days):
     df = pd.DataFrame.from_dict({
         'date': pd.date_range(p0_time, p0_time+timedelta(days=total_days)),
@@ -315,9 +328,12 @@ def save_to_json(obj, path):
 def save_bundle(bundle, p0_time, total_days, dir_name):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
-    names = ['total', 'delta', 'increase']
+    names = ['total', 'delta', 'increase', 'transition']
     for d, name in zip(bundle, names):
-        df = data2df(d, p0_time, total_days)
-        if name == 'total':
-            df = enhance_total(df)
+        if name == 'transition':
+            df = trans2df(d, p0_time, total_days)
+        else:
+            df = data2df(d, p0_time, total_days)
+            if name == 'total':
+                df = enhance_total(df)
         df.to_csv(f'{dir_name}/{name}.csv', index=None)

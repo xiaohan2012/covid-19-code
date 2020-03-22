@@ -47,6 +47,15 @@ def do_simulation(
     increase_data[0, STATE.E] = params.initial_num_E
     increase_data[0, STATE.I] = params.initial_num_I
     increase_data[0, STATE.M] = params.initial_num_M
+
+    trans_data = np.zeros((total_days+1, NUM_TRANS), dtype=float)
+    trans_data[0, TRANS.S2E] = 0
+    trans_data[0, TRANS.E2I] = 0
+    trans_data[0, TRANS.I2M] = 0
+    trans_data[0, TRANS.I2O] = 0
+    trans_data[0, TRANS.M2O] = 0
+    trans_data[0, TRANS.EbyE] = 0
+    trans_data[0, TRANS.EbyI] = 0
     
     for T, num in bed_info:
         delta_data[T, STATE.H] = num
@@ -73,7 +82,15 @@ def do_simulation(
         if np.isclose(inf_proba_I, 0):
             inf_proba_I = 0
 
-        inf_proba = min(1, inf_proba_E + inf_proba_I)  # bound it by 1
+        # infection by E or I
+        inf_proba_sum = inf_proba_E + inf_proba_I
+        if inf_proba_sum > 1:
+            # bound it from above by 1
+            inf_proba_E /= inf_proba_sum
+            inf_proba_I /= inf_proba_sum
+
+        inf_proba = inf_proba_E + inf_proba_I
+        # inf_proba = min(1, inf_proba_E + inf_proba_I)  # bound it by 1
 
         assert inf_proba_E >= 0, inf_proba_E
         assert inf_proba_I >= 0, inf_proba_I
@@ -81,6 +98,9 @@ def do_simulation(
         assert inf_proba_I <= 1, (data[T-1, STATE.I], params.beta_func(T-1),  inf_proba_I)
         assert inf_proba <= 1
 
+        E_by_E = inf_proba_E * data[T-1, STATE.S]
+        E_by_I = inf_proba_I * data[T-1, STATE.S]
+        
         day_offsets = [t for t in range(1, params.k_days+1) if T - t >= 0]
 
         S2E = (data[T-1, STATE.S] * inf_proba)
@@ -144,7 +164,7 @@ def do_simulation(
         E2I_by_days_by_stage[stage][:len(E2I_array)] += E2I_array
         I2OM_by_days_by_stage[stage][:len(I2M_array)] += I2M_array
         I2OM_by_days_by_stage[stage][-1] += I2O
-
+        
         delta_S = -S2E
         delta_E = S2E - E2I
         delta_I = E2I - I2M - I2O
@@ -157,6 +177,14 @@ def do_simulation(
         data[T, STATE.M] = data[T-1, STATE.M] + delta_M
         data[T, STATE.O] = data[T-1, STATE.O] + delta_O
 
+        trans_data[T, TRANS.S2E] = S2E
+        trans_data[T, TRANS.E2I] = E2I
+        trans_data[T, TRANS.I2M] = I2M
+        trans_data[T, TRANS.I2O] = I2O
+        trans_data[T, TRANS.M2O] = M2O
+        trans_data[T, TRANS.EbyE] = E_by_E
+        trans_data[T, TRANS.EbyI] = E_by_I
+        
         if verbose > 0:
             for s, v in zip(STATES, data[T, :]):
                 print(f'{s}: {v}')
@@ -245,4 +273,4 @@ def do_simulation(
                                     if turning_time_theory is not None
                                     else None)
     
-    return data, delta_data, increase_data, stats
+    return data, delta_data, increase_data, trans_data, stats
