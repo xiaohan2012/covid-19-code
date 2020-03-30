@@ -51,11 +51,11 @@ bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d < end_date]
 
 #### ATTENTION
 #  below are the parameter search ranges
-# alpha_list = np.arange(0.1,  1.91,  step=0.1) * 1e-08
-# beta_list = np.arange(0.1,  1.91,  step=0.1) * 1e-09
+alpha_list = np.arange(0.1,  1.91,  step=0.1) * 1e-08
+beta_list = np.arange(0.1,  1.91,  step=0.1) * 1e-09
 
-alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
-beta_list = 1 / np.power(10, np.arange(7, 11, 1))
+# alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
+# beta_list = 1 / np.power(10, np.arange(7, 11, 1))
 
 # assumption: alpha > beta
 alpha_beta_choices = [
@@ -169,8 +169,10 @@ fig, ax = plt.subplots(1, 1)
 ax.plot(I_pred_all, 's-', color='red')
 ax.plot(I_true_all, '-.', color='blue')
 fig.legend(['predicted I (increase)', 'actual I (increase)'], loc='best')
-fig.savefig('figs/true_I_vs_pred_I.pdf')
+
 makedir_if_not_there('figs')
+fig.savefig('figs/true_I_vs_pred_I.pdf')
+
 
 I_pred = increase[1:(len(I_true)+1), STATE.I]
 dates = pd.date_range(start_date+timedelta(days=1), end_date+timedelta(days=2))
@@ -184,9 +186,6 @@ data = {
 }
 
 fit_df = pd.DataFrame.from_dict(data)
+
 makedir_if_not_there('output/tbl/parameter_fitting')
 fit_df.to_csv('output/tbl/parameter_fitting/daily-data.csv', index=None)
-
-
-
-

@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 
 from const import STATE, STATES, NUM_STATES, COLORS, TRANS
 
-mpl.style.use('paper')
+# mpl.style.use('paper')
 
 DATE_FORMAT = '%d/%m/%Y'
 

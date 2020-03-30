@@ -12,6 +12,7 @@ def do_simulation(
         total_days, bed_info,
         params,
         p0_time,
+        show_bar=False,
         verbose=0
 ):
     """
@@ -68,7 +69,13 @@ def do_simulation(
     num_in_I[0] = params.initial_num_I
 
     end_time = None
-    for T in tqdm(range(1, total_days+1)):
+
+    iters = range(1, total_days+1)
+
+    if show_bar:
+        iters = tqdm(iters)
+
+    for T in iters:
         if verbose > 0:
             print('-' * 10)
             print(f'at iteration {T}')
