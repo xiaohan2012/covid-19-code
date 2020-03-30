@@ -337,3 +337,8 @@ def save_bundle(bundle, p0_time, total_days, dir_name):
             if name == 'total':
                 df = enhance_total(df)
         df.to_csv(f'{dir_name}/{name}.csv', index=None)
+
+
+def makedir_if_not_there(d):
+    if not os.path.exists(d):
+        os.makedirs(d)
