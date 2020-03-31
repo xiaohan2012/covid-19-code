@@ -24,12 +24,10 @@ start_date = T('27/01/2020')  # T=0
 end_date = T('09/02/2020')  #09/02
 
 
-
-subdf = df[(df['date'] > start_date) & (df['date'] < end_date)] 
+subdf = df[(df['date'] > start_date) & (df['date'] < end_date)]
 
 I_true = subdf['infected'].values
 O_true = subdf['death'].values + subdf['cured'].values
-
 
 
 ### ATTENTION
@@ -38,11 +36,11 @@ O_true = subdf['death'].values + subdf['cured'].values
 total_days = subdf.shape[0]
 bed_info_raw = [
     (T('27/01/2020'), 4000),
-    (T('31/01/2020'), 6000), # 10000),
-    (T('04/02/2020'), 1000), # 11000),
-    (T('07/02/2020'), 2000), # 13000)
-    (T('11/02/2020'), 6000),  # 19000
-    (T('17/02/2020'), 1000),  # 20000
+    (T('31/01/2020'), 6000),
+    (T('04/02/2020'), 1000),
+    (T('07/02/2020'), 2000),
+    (T('11/02/2020'), 6000),
+    (T('17/02/2020'), 1000),
 ]
 # number of new beds at  some days
 bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d < end_date]
@@ -50,27 +48,32 @@ bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d < end_date]
 
 #### ATTENTION
 #  below are the parameter search ranges
-alpha_list = np.arange(0.1,  1.91,  step=0.1) * 1e-08
-beta_list = np.arange(0.1,  1.91,  step=0.1) * 1e-09
+alpha_list = np.arange(0.5,  1.81,  step=0.1) * 1e-08
+beta_list = np.arange(0.5,  1.81,  step=0.1) * 1e-09
 
 
 # alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
 # beta_list = 1 / np.power(10, np.arange(7, 11, 1))
 
-# assumption: alpha > beta
+# assumption: alpha > beta and beta >= 0.1 * alpha
 alpha_beta_choices = [
     (alpha,  beta)
     for alpha, beta in product(alpha_list, beta_list)
-    if alpha > beta
-] 
+    if (alpha > beta) and (beta >= 0.1 * alpha)
+]
+
 num_I_list = np.arange(5000, 10001, step=1000)
 I2E_factors = [1., 1.5, 2]
 I2M_factors = [0.25, 0.5, 1.0]
 
 k_days_list = np.arange(8, 31, 3)
 x0_pt_list = np.arange(3000, 21001, 3000)
-mu_ei_list = [6] 
-mu_mo_list = [14]
+# k_days_list = [14]
+# x0_pt_list = [3000]
+
+mu_ei_list = [6]
+mu_mo_list = [10]
+
 
 def one_run(initial_num_I, I2E_factor, I2M_factor, alpha, beta, mu_ei, mu_mo, k_days, x0_pt):
     initial_num_E = initial_num_I * I2E_factor
