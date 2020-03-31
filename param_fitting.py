@@ -6,7 +6,6 @@ from datetime import timedelta
 from itertools import product
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from tqdm import tqdm
-from matplotlib import pyplot as plt
 from joblib import delayed, Parallel
 
 
@@ -53,6 +52,7 @@ bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d < end_date]
 #  below are the parameter search ranges
 alpha_list = np.arange(0.1,  1.91,  step=0.1) * 1e-08
 beta_list = np.arange(0.1,  1.91,  step=0.1) * 1e-09
+
 
 # alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
 # beta_list = 1 / np.power(10, np.arange(7, 11, 1))
@@ -139,12 +139,12 @@ res_df = pd.DataFrame(
 
 
 br = res_df[res_df['is_feasible']].sort_values(by='I_mae').iloc[0]
-print('best parameter')
+print('best parameter:')
+print('=' * 10)
 print(br)
 
 # number of new beds at  some days
 bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d <= end_date]
-bed_info
 
 params = Params(
     initial_num_I=br.initial_num_I, 
@@ -156,6 +156,11 @@ params = Params(
     x0_pt=br.x0_pt
 )
 
+pkl.dump(
+    params,
+    open('output/params_after_lockdown.pkl', 'wb')
+)
+
 total, delta, increase, trans_data, aux = do_simulation(
     total_days+60,
     bed_info, params, p0_time=start_date
@@ -163,15 +168,6 @@ total, delta, increase, trans_data, aux = do_simulation(
 
 I_true_all = df[(df['date'] > start_date)] ['infected'].values
 I_pred_all = increase[1:len(I_true_all)+1, STATE.I]
-
-fig, ax = plt.subplots(1, 1)
-
-ax.plot(I_pred_all, 's-', color='red')
-ax.plot(I_true_all, '-.', color='blue')
-fig.legend(['predicted I (increase)', 'actual I (increase)'], loc='best')
-
-makedir_if_not_there('figs')
-fig.savefig('figs/true_I_vs_pred_I.pdf')
 
 
 I_pred = increase[1:(len(I_true)+1), STATE.I]
