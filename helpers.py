@@ -67,6 +67,7 @@ class Params:
             alpha=0.02, beta=0.01,
             mu_ei=6.0,
             mu_mo=14.0,
+            mean_IM=7,
             x0_pt=10000, # k_pt=0.0001,
             k_days=28,
             # city-related
@@ -95,7 +96,7 @@ class Params:
         
         # I -> M: geoemtric
         self.x0_pt = x0_pt
-        self.k_pt = 1.791759 / x0_pt  # the coefficient 1.791759 is described in paper
+        self.k_pt = np.log(mean_IM-1) / x0_pt  
         
         # M -> O: Poisson
         self.mu_mo = mu_mo
