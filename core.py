@@ -213,7 +213,7 @@ def do_simulation(
 
         total_infected = data[T, [STATE.M, STATE.E, STATE.I, STATE.O]].sum()
         O_fraction = (data[T, STATE.O] / total_infected)
-        if O_fraction >= 0.99:
+        if False and O_fraction >= 0.99:
             end_time = T
             print(f'O fraction  {O_fraction}')
             # fraction of out-of-system exceeds 0.99
