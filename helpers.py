@@ -192,11 +192,11 @@ alpha: {self.alpha}
 beta:  {self.beta}
 
 mu_ei: {self.mu_ei}
+mu_mo: {self.mu_mo}
 
 x0_pt: {self.x0_pt}
 k_pt:  {self.k_pt}
-
-mu_mo: {self.mu_mo}
+mean_IM: {self.mean_IM}
 
 k_days: {self.k_days}
         """

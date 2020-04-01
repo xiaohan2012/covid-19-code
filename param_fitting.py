@@ -48,12 +48,12 @@ bed_info = [((d-start_date).days, n) for d, n in bed_info_raw if d < end_date]
 
 #### ATTENTION
 #  below are the parameter search ranges
-alpha_list = np.arange(0.5,  1.81,  step=0.1) * 1e-08
-beta_list = np.arange(0.5,  1.81,  step=0.1) * 1e-09
+# alpha_list = np.arange(0.5,  1.81,  step=0.1) * 1e-08
+# beta_list = np.arange(0.5,  1.81,  step=0.1) * 1e-09
 
 
-# alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
-# beta_list = 1 / np.power(10, np.arange(7, 11, 1))
+alpha_list = 1 / np.power(10, np.arange(7, 11, 1))
+beta_list = 1 / np.power(10, np.arange(7, 11, 1))
 
 # assumption: alpha > beta and beta >= 0.1 * alpha
 alpha_beta_choices = [
@@ -66,10 +66,10 @@ num_I_list = np.arange(5000, 10001, step=1000)
 I2E_factors = [1., 1.5, 2]
 I2M_factors = [0.25, 0.5, 1.0]
 
-k_days_list = np.arange(8, 31, 3)
-x0_pt_list = np.arange(3000, 21001, 3000)
-# k_days_list = [14]
-# x0_pt_list = [3000]
+# k_days_list = np.arange(8, 31, 3)
+# x0_pt_list = np.arange(3000, 21001, 3000)
+k_days_list = [14]
+x0_pt_list = [3000]
 
 mu_ei_list = [6]
 mu_mo_list = [10]
