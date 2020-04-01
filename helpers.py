@@ -96,6 +96,7 @@ class Params:
         
         # I -> M: geoemtric
         self.x0_pt = x0_pt
+        self.mean_IM = mean_IM
         self.k_pt = np.log(mean_IM-1) / x0_pt  
         
         # M -> O: Poisson
