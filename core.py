@@ -8,6 +8,56 @@ from helpers import  pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
 from const import *
 
 
+def create_total_array(total_days, params):
+    # the total number of each state at each day
+    total_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
+    total_data[0, STATE.S] = params.total_population
+    total_data[0, STATE.E] = params.initial_num_E
+    total_data[0, STATE.I] = params.initial_num_I
+    total_data[0, STATE.M] = params.initial_num_M
+
+    return total_data
+    
+
+def create_delta_array(total_days, params):
+    delta_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
+    delta_data[0, STATE.S] = params.total_population
+    delta_data[0, STATE.E] = params.initial_num_E
+    delta_data[0, STATE.I] = params.initial_num_I
+    delta_data[0, STATE.M] = params.initial_num_M
+    return delta_data
+
+
+def create_delta_plus_array(total_days, params):
+    delta_plus = np.zeros((total_days+1, NUM_STATES), dtype=float)
+    delta_plus[0, STATE.S] = params.total_population
+    delta_plus[0, STATE.E] = params.initial_num_E
+    delta_plus[0, STATE.I] = params.initial_num_I
+    delta_plus[0, STATE.M] = params.initial_num_M
+    return delta_plus
+
+
+def create_trans_array(total_days):
+    trans_data = np.zeros((total_days+1, NUM_TRANS), dtype=float)
+    trans_data[0, TRANS.S2E] = 0
+    trans_data[0, TRANS.E2I] = 0
+    trans_data[0, TRANS.I2M] = 0
+    trans_data[0, TRANS.I2O] = 0
+    trans_data[0, TRANS.M2O] = 0
+    trans_data[0, TRANS.EbyE] = 0
+    trans_data[0, TRANS.EbyI] = 0
+
+    return trans_data
+
+
+def populate_bed_info(bed_info, total_data, delta_data, delta_plus):
+    for T, num in bed_info:
+        delta_data[T, STATE.H] = num
+        delta_plus[T, STATE.H] = num
+        
+    total_data[:, STATE.H] = np.cumsum(delta_plus[:, STATE.H])
+    
+
 def do_simulation(
         total_days, bed_info,
         params,
@@ -28,41 +78,23 @@ def do_simulation(
     num_stages = params.num_stages
     E2I_by_days_by_stage = {s: np.zeros(params.k_days) for s in range(num_stages)}
     I2OM_by_days_by_stage = {s: np.zeros(params.k_days+1) for s in range(num_stages)}
-    
-    data = np.zeros((total_days+1, NUM_STATES), dtype=float)
-    data[0, STATE.S] = params.total_population
-    data[0, STATE.E] = params.initial_num_E
-    data[0, STATE.I] = params.initial_num_I
-    data[0, STATE.M] = params.initial_num_M
 
-    # the ith row means data[i, state] - data[i-1, state]
-    delta_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
-    delta_data[0, STATE.S] = params.total_population
-    delta_data[0, STATE.E] = params.initial_num_E
-    delta_data[0, STATE.I] = params.initial_num_I
-    delta_data[0, STATE.M] = params.initial_num_M
+    # the total number of each state at each day
+    total_data = create_total_array(total_days, params)
     
-    # the number of increaset of each state per day
-    increase_data = np.zeros((total_days+1, NUM_STATES), dtype=float)
-    increase_data[0, STATE.S] = params.total_population
-    increase_data[0, STATE.E] = params.initial_num_E
-    increase_data[0, STATE.I] = params.initial_num_I
-    increase_data[0, STATE.M] = params.initial_num_M
+    # the change of each state at each day compared to the previou day
+    # the ith row means total_data[i, state] - total_data[i-1, state]
+    # so the value can be positive, negative or zero
+    delta_data = create_delta_array(total_days, params)
 
-    trans_data = np.zeros((total_days+1, NUM_TRANS), dtype=float)
-    trans_data[0, TRANS.S2E] = 0
-    trans_data[0, TRANS.E2I] = 0
-    trans_data[0, TRANS.I2M] = 0
-    trans_data[0, TRANS.I2O] = 0
-    trans_data[0, TRANS.M2O] = 0
-    trans_data[0, TRANS.EbyE] = 0
-    trans_data[0, TRANS.EbyI] = 0
+    # the number of additions of each state at each day
+    # essentially, detal_plus[time, state] = max(0, detal_data[time, state])
+    delta_plus = create_delta_plus_array(total_days, params)
     
-    for T, num in bed_info:
-        delta_data[T, STATE.H] = num
-        increase_data[T, STATE.H] = num
-        
-    data[:, STATE.H] = np.cumsum(increase_data[:, STATE.H])
+    # number of state transitions happening at each day
+    trans_data = create_trans_array(total_days)
+
+    populate_bed_info(populate_bed_info(bed_info, total_data, delta_data, delta_plus))
 
     # dynamic array
     num_in_I = np.zeros((total_days+1), dtype=float)
@@ -80,8 +112,8 @@ def do_simulation(
             print('-' * 10)
             print(f'at iteration {T}')
 
-        inf_proba_E = min(1, data[T-1, STATE.E] * params.alpha_func(T-1))
-        inf_proba_I = min(1, data[T-1, STATE.I] * params.beta_func(T-1))
+        inf_proba_E = min(1, total_data[T-1, STATE.E] * params.alpha_func(T-1))
+        inf_proba_I = min(1, total_data[T-1, STATE.I] * params.beta_func(T-1))
 
         if np.isclose(inf_proba_E, 0):
             inf_proba_E = 0
@@ -101,63 +133,76 @@ def do_simulation(
 
         assert inf_proba_E >= 0, inf_proba_E
         assert inf_proba_I >= 0, inf_proba_I
-        assert inf_proba_E <= 1, (data[T-1, STATE.E], params.alpha_func(T-1), inf_proba_E)
-        assert inf_proba_I <= 1, (data[T-1, STATE.I], params.beta_func(T-1),  inf_proba_I)
+        assert inf_proba_E <= 1, (total_data[T-1, STATE.E], params.alpha_func(T-1), inf_proba_E)
+        assert inf_proba_I <= 1, (total_data[T-1, STATE.I], params.beta_func(T-1),  inf_proba_I)
         assert inf_proba <= 1
 
-        E_by_E = inf_proba_E * data[T-1, STATE.S]
-        E_by_I = inf_proba_I * data[T-1, STATE.S]
-        
+        # what do they mean?
+        E_by_E = inf_proba_E * total_data[T-1, STATE.S]
+        E_by_I = inf_proba_I * total_data[T-1, STATE.S]
+
+        # previous days to consider for E-I
         day_offsets = [t for t in range(1, params.k_days+1) if T - t >= 0]
 
-        S2E = (data[T-1, STATE.S] * inf_proba)
+        S2E = (total_data[T-1, STATE.S] * inf_proba)
 
-        E2I_array = [pr_EI(t) * increase_data[T-t, STATE.E] for t in day_offsets]
+        # each element is the number of infections from E to I at a specific day in the past
+        E2I_array = [pr_EI(t) * delta_plus[T-t, STATE.E] for t in day_offsets]
         
         E2I = np.sum(E2I_array)
         
-        # remaining I exceeding k days go to O
+        # remaining I exceeding k_days go to O
+        # (I -> O)
         if T-params.k_days-1 >= 0:
             I2O = num_in_I[T-params.k_days-1]
             num_in_I[T-params.k_days-1] = 0
         else:
             I2O = 0
 
+        # I -> M: infected to hospitized
         I2M_array = np.array(
             [
-                pr_IM(T-1, t, data) * increase_data[T-t, STATE.I]
+                pr_IM(T-1, t, total_data) * delta_plus[T-t, STATE.I]
                 for t in day_offsets
             ]
         )
         I2M = np.sum(I2M_array)
 
-        M2O = np.sum([pr_MO(t) * increase_data[T-t, STATE.M] for t in day_offsets])
+        # M -> O: hospitized to recovered/dead
+        M2O = np.sum([pr_MO(t) * delta_plus[T-t, STATE.M] for t in day_offsets])
 
-        if data[T-1,  STATE.M] == data[T-1, STATE.H]:
+        # if hospital is full now
+        # I -> M is not allowed (no I goes to hospital)
+        if total_data[T-1,  STATE.M] == total_data[T-1, STATE.H]:
             assert I2M == 0
 
-        increase_data[T, STATE.S] = 0
-        increase_data[T, STATE.E] = S2E
-        increase_data[T, STATE.I] = E2I
+        delta_plus[T, STATE.S] = 0
+        delta_plus[T, STATE.E] = S2E
+        delta_plus[T, STATE.I] = E2I
 
+        # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
         # when there are more people that needs to go to hospital than the hospital capacity
-        remaining_hospital_capacity = data[T-1, STATE.H] - data[T-1, STATE.M]
+        remaining_hospital_capacity = total_data[T-1, STATE.H] - total_data[T-1, STATE.M]
         if (I2M - M2O) >= remaining_hospital_capacity:
-            I2M = remaining_hospital_capacity + M2O
+            # if hospital is out of capcity
+            I2M = remaining_hospital_capacity + M2O  # this many I goes to hospital
             I2M_array = I2M / np.sum(I2M_array) * I2M_array
             if verbose > 0:
                 print('hospital is full')
 
-        increase_data[T, STATE.M] = I2M  # bound I2M by remaining capacity
-        increase_data[T, STATE.O] = M2O + I2O
+        delta_plus[T, STATE.M] = I2M  # bound I2M by remaining capacity
+        delta_plus[T, STATE.O] = M2O + I2O
 
+        # number of I on each day needs to be adjusted (due to I -> M)
         num_in_I[T] = E2I
         num_in_I[T-np.array(day_offsets, dtype=int)] -= I2M_array
 
+        # print and check the transition information
         for trans, v in zip(('S->E', 'E->I', 'I->O', 'I->M', 'M->O'), (S2E, E2I, I2O, I2M, M2O)):
             if np.isclose(v, 0):
                 v = 0
+            # transition is non-negative
             assert v >= 0, f'{trans}: {v}'
             if verbose > 0:
                 print(f'{trans}: {v}')
@@ -178,11 +223,11 @@ def do_simulation(
         delta_M = I2M - M2O
         delta_O = I2O + M2O
 
-        data[T, STATE.S] = data[T-1, STATE.S] + delta_S
-        data[T, STATE.E] = data[T-1, STATE.E] + delta_E
-        data[T, STATE.I] = data[T-1, STATE.I] + delta_I
-        data[T, STATE.M] = data[T-1, STATE.M] + delta_M
-        data[T, STATE.O] = data[T-1, STATE.O] + delta_O
+        total_data[T, STATE.S] = total_data[T-1, STATE.S] + delta_S
+        total_data[T, STATE.E] = total_data[T-1, STATE.E] + delta_E
+        total_data[T, STATE.I] = total_data[T-1, STATE.I] + delta_I
+        total_data[T, STATE.M] = total_data[T-1, STATE.M] + delta_M
+        total_data[T, STATE.O] = total_data[T-1, STATE.O] + delta_O
 
         trans_data[T, TRANS.S2E] = S2E
         trans_data[T, TRANS.E2I] = E2I
@@ -193,17 +238,19 @@ def do_simulation(
         trans_data[T, TRANS.EbyI] = E_by_I
         
         if verbose > 0:
-            for s, v in zip(STATES, data[T, :]):
+            for s, v in zip(STATES, total_data[T, :]):
                 print(f'{s}: {v}')
-            print(data[T, :].sum())
+            print(total_data[T, :].sum())
 
-        assert np.isclose(data[T, :-1].sum(), data[0, :-1].sum()), \
-            '{} != {}'.format(data[T, :-1].sum(), data[0, :-1].sum())
+        # the population size (regardless of states) should not change
+        assert np.isclose(total_data[T, :-1].sum(), total_data[0, :-1].sum()), \
+            '{} != {}'.format(total_data[T, :-1].sum(), total_data[0, :-1].sum())
 
-        assert data[T, STATE.M] <= data[T, STATE.H]
+        # hospital should be not over-capacited
+        assert total_data[T, STATE.M] <= total_data[T, STATE.H]
 
-        data[T, np.isclose(data[T, :], 0)] = 0   # it might be < 0 sometimes
-        assert ((data[T, :]) >= 0).all(), data[T, :]
+        total_data[T, np.isclose(total_data[T, :], 0)] = 0   # it might be < 0
+        assert ((total_data[T, :]) >= 0).all(), total_data[T, :]  # all values are non-neg
 
         delta_data[T, STATE.S] = delta_S
         delta_data[T, STATE.E] = delta_E
@@ -211,17 +258,17 @@ def do_simulation(
         delta_data[T, STATE.M] = delta_M
         delta_data[T, STATE.O] = delta_O
 
-        total_infected = data[T, [STATE.M, STATE.E, STATE.I, STATE.O]].sum()
-        O_fraction = (data[T, STATE.O] / total_infected)
+        total_infected = total_data[T, [STATE.M, STATE.E, STATE.I, STATE.O]].sum()
+        O_fraction = (total_data[T, STATE.O] / total_infected)
         if False and O_fraction >= 0.99:
             end_time = T
             print(f'O fraction  {O_fraction}')
             # fraction of out-of-system exceeds 0.99
             # the simulation can stop
             # all states fixed
-            if (T+1) < data.shape[0]:
+            if (T+1) < total_data.shape[0]:
                 for s in range(NUM_STATES):
-                    data[T+1:, s] = data[T, s]
+                    total_data[T+1:, s] = total_data[T, s]
             break
 
     def plus_time_and_to_string(days):
@@ -239,20 +286,20 @@ def do_simulation(
         stats['end_time'] = (int(end_time), plus_time_and_to_string(end_time))
     else:
         stats['end_time'] = None
-    peak_time = (data[:, STATE.M] + data[:, STATE.I]).argmax()
+    peak_time = (total_data[:, STATE.M] + total_data[:, STATE.I]).argmax()
     stats['peak_time'] = (int(peak_time), plus_time_and_to_string(peak_time))
     
-    O = data[:, STATE.O]
-    IM = data[:, STATE.I] + data[:, STATE.M]
-    IME = IM + data[:, STATE.E]
+    O = total_data[:, STATE.O]
+    IM = total_data[:, STATE.I] + total_data[:, STATE.M]
+    IME = IM + total_data[:, STATE.E]
 
     try:
-        when_dO_gt_dI = (increase_data[:, STATE.O] > increase_data[:, STATE.I]).nonzero()[0].min()
+        when_dO_gt_dI = (delta_plus[:, STATE.O] > delta_plus[:, STATE.I]).nonzero()[0].min()
     except ValueError:
         when_dO_gt_dI = None
 
     try:
-        when_dO_gt_dE = (increase_data[:, STATE.O] > increase_data[:, STATE.E]).nonzero()[0].min()
+        when_dO_gt_dE = (delta_plus[:, STATE.O] > delta_plus[:, STATE.E]).nonzero()[0].min()
     except ValueError:
         when_dO_gt_dE = None
 
@@ -280,4 +327,4 @@ def do_simulation(
                                     if turning_time_theory is not None
                                     else None)
     
-    return data, delta_data, increase_data, trans_data, stats
+    return total_data, delta_data, delta_plus, trans_data, stats

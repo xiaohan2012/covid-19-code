@@ -69,6 +69,7 @@ class Params:
             mu_mo=14.0,
             mean_IM=7,
             x0_pt=10000, # k_pt=0.0001,
+            # after k_days, an I becomes O (recovered/dead)
             k_days=28,
             # city-related
             total_population=9000000,
@@ -77,7 +78,6 @@ class Params:
             initial_num_M=0,
             stages=None
         ):
-        
         self.total_population = total_population
         self.initial_num_E = initial_num_E
         self.initial_num_I = initial_num_I
