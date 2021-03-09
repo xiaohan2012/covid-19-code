@@ -74,8 +74,9 @@ def do_simulation(
     pr_EI = partial(pr_EI_long, mu_ei=params.mu_ei, k=params.k_days)
     pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
     pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
-
+    
     num_stages = params.num_stages
+    # used to calculate the R0 values for each stage
     E2I_by_days_by_stage = {s: np.zeros(params.k_days) for s in range(num_stages)}
     I2OM_by_days_by_stage = {s: np.zeros(params.k_days+1) for s in range(num_stages)}
 
@@ -94,7 +95,8 @@ def do_simulation(
     # number of state transitions happening at each day
     trans_data = create_trans_array(total_days)
 
-    populate_bed_info(populate_bed_info(bed_info, total_data, delta_data, delta_plus))
+    # populate bed information
+    populate_bed_info(bed_info, total_data, delta_data, delta_plus)
 
     # dynamic array
     num_in_I = np.zeros((total_days+1), dtype=float)
@@ -276,6 +278,8 @@ def do_simulation(
     
     stats = dict()
     R0_by_stage = dict()
+
+    # get the R0 value for each stage (e.g., two weeks)
     for s in range(num_stages):
         T1, T2 = get_T1_and_T2(I2OM_by_days_by_stage[s], E2I_by_days_by_stage[s])
         alpha, beta = params.get_alpha_beta_by_stage(s)

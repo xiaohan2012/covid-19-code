@@ -119,8 +119,9 @@ class Params:
             return self.num_stages - 1
     
     def populate_alpha_array(self):
+        """create an array which stores alpha values for each day"""
         times = np.array([t for t, _ in self.alpha])
-        values = np.array([v for _, v in self.alpha])
+        values = np.array([v for _, v in self.alpha])  # alpha values
         
         max_t = times.max()
         self.alpha_array = np.zeros(max_t+1)
@@ -207,6 +208,7 @@ def T(s):
 
 
 def get_T1_and_T2(I2OM_by_days, E2I_by_days):
+    """what do these two days mean?"""
     I_num_and_day_array = np.array(
         [[num, d] for num, d in zip(I2OM_by_days, range(1, len(I2OM_by_days) + 1))]
     )
