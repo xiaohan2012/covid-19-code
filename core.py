@@ -29,7 +29,7 @@ class Simulator:
 
         self.init()
 
-    def plus_time_and_to_string(days):
+    def plus_time_and_to_string(self, days):
         """return absoluate date, which is p0_time + days"""
         return (self.p0_time + timedelta(days=int(days))).strftime('%d/%m/%y')
         
@@ -119,11 +119,10 @@ class Simulator:
         # previous days to consider for E-I
         self.day_offsets = [t for t in range(1, self.params.k_days+1) if T - t >= 0]
         
-    def get_S2E(self, T):
-        S2E = (self.total_array[T-1, STATE.S] * self.inf_proba)
-        return S2E
+    def update_S2E(self, T):
+        self.S2E = (self.total_array[T-1, STATE.S] * self.inf_proba)
     
-    def get_E2I(self, T):
+    def update_E2I(self, T):
         # what do they mean?
         self.E_by_E = self.inf_proba_E * self.total_array[T-1, STATE.S]
         self.E_by_I = self.inf_proba_I * self.total_array[T-1, STATE.S]
@@ -131,21 +130,18 @@ class Simulator:
         # each element is the number of infections from E to I at a specific day in the past
         self.E2I_array = [self.pr_EI(t) * self.delta_plus_array[T-t, STATE.E] for t in self.day_offsets]
         
-        E2I = np.sum(self.E2I_array)
-        return E2I
+        self.E2I = np.sum(self.E2I_array)
 
-    def get_I2O(self, T):
+    def update_I2O(self, T):
         # remaining I exceeding k_days go to O
         # (I -> O)
         if T - self.params.k_days - 1 >= 0:
-            I2O = self.num_in_I[T - self.params.k_days - 1]
+            self.I2O = self.num_in_I[T - self.params.k_days - 1]
             self.num_in_I[T - self.params.k_days - 1] = 0
         else:
-            I2O = 0
+            self.I2O = 0
 
-        return I2O
-
-    def get_I2M(self, T):
+    def update_I2M(self, T):
         # I -> M: infected to hospitized
         self.I2M_array = np.array(
             [
@@ -153,47 +149,47 @@ class Simulator:
                 for t in self.day_offsets
             ]
         )
-        I2M = np.sum(self.I2M_array)
+        self.I2M = np.sum(self.I2M_array)
 
         # if hospital is full now
         # I -> M is not allowed (no I goes to hospital)
         if self.total_array[T-1,  STATE.M] == self.total_array[T-1, STATE.H]:
-            assert I2M == 0
-        
-        return I2M
+            assert self.I2M == 0
 
-    def get_M2O(self, T):
+    def update_M2O(self, T):
         # M -> O: hospitized to recovered/dead
-        M2O = np.sum([self.pr_MO(t) * self.delta_plus_array[T-t, STATE.M] for t in self.day_offsets])
-        return M2O
+        self.M2O = np.sum([self.pr_MO(t) * self.delta_plus_array[T-t, STATE.M] for t in self.day_offsets])
 
-    def update_delta_plus_array(self, T, S2E, E2I, I2O, I2M, M2O):
+    def update_delta_plus_array(self, T):
         self.delta_plus_array[T, STATE.S] = 0
-        self.delta_plus_array[T, STATE.E] = S2E
-        self.delta_plus_array[T, STATE.I] = E2I
+        self.delta_plus_array[T, STATE.E] = self.S2E
+        self.delta_plus_array[T, STATE.I] = self.E2I
 
         # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
         # when there are more people that needs to go to hospital than the hospital capacity
         remaining_hospital_capacity = self.total_array[T-1, STATE.H] - self.total_array[T-1, STATE.M]
-        if (I2M - M2O) >= remaining_hospital_capacity:
+        if (self.I2M - self.M2O) >= remaining_hospital_capacity:
             # if hospital is out of capcity
-            I2M = remaining_hospital_capacity + M2O  # this many I goes to hospital
-            self.I2M_array = I2M / np.sum(self.I2M_array) * self.I2M_array
+            # NOTE: I2M is change here!
+            self.I2M = remaining_hospital_capacity + self.M2O  # this many I goes to hospital
+            self.I2M_array = self.I2M / np.sum(self.I2M_array) * self.I2M_array
             if self.verbose > 0:
                 print('hospital is full')
 
-        self.delta_plus_array[T, STATE.M] = I2M  # bound I2M by remaining capacity
-        self.delta_plus_array[T, STATE.O] = M2O + I2O
+        self.delta_plus_array[T, STATE.M] = self.I2M  # bound self.I2M by remaining capacity
+        self.delta_plus_array[T, STATE.O] = self.M2O + self.I2O
 
-    def update_I_array(self, T, E2I):
+    def update_I_array(self, T):
         # number of I on each day needs to be adjusted (due to I -> M)
-        self.num_in_I[T] = E2I
+        self.num_in_I[T] = self.E2I
         self.num_in_I[T - np.array(self.day_offsets, dtype=int)] -= self.I2M_array
 
-    def check_and_log(self, S2E, E2I, I2O, I2M, M2O):
+    def check_and_log(self):
         # print and check the transition information
-        for trans, v in zip(('S->E', 'E->I', 'I->O', 'I->M', 'M->O'), (S2E, E2I, I2O, I2M, M2O)):
+        for trans, v in zip(
+                ('S->E', 'E->I', 'I->O', 'I->M', 'M->O'),
+                (self.S2E, self.E2I, self.I2O, self.I2M, self.M2O)):
             if np.isclose(v, 0):
                 v = 0
             # transition is non-negative
@@ -201,23 +197,23 @@ class Simulator:
             if self.verbose > 0:
                 print(f'{trans}: {v}')
 
-        for v in [S2E, E2I, I2M, I2O, M2O]:
+        for v in [self.S2E, self.E2I, self.I2M, self.I2O, self.M2O]:
             assert not np.isnan(v)
             assert not np.isinf(v)
 
-    def update_stage_stat(self, T, I2O):
+    def update_stage_stat(self, T):
         # print(E2I_by_days, self.E2I_array)
         stage = self.params.get_stage_num(T)
         self.E2I_by_days_by_stage[stage][:len(self.E2I_array)] += self.E2I_array
         self.I2OM_by_days_by_stage[stage][:len(self.I2M_array)] += self.I2M_array
-        self.I2OM_by_days_by_stage[stage][-1] += I2O
+        self.I2OM_by_days_by_stage[stage][-1] += self.I2O
 
-    def update_major_arrays(self, T, S2E, E2I, I2O, I2M, M2O):
-        delta_S = -S2E
-        delta_E = S2E - E2I
-        delta_I = E2I - I2M - I2O
-        delta_M = I2M - M2O
-        delta_O = I2O + M2O
+    def update_other_major_arrays(self, T):
+        delta_S = -self.S2E
+        delta_E = self.S2E - self.E2I
+        delta_I = self.E2I - self.I2M - self.I2O
+        delta_M = self.I2M - self.M2O
+        delta_O = self.I2O + self.M2O
 
         self.total_array[T, STATE.S] = self.total_array[T-1, STATE.S] + delta_S
         self.total_array[T, STATE.E] = self.total_array[T-1, STATE.E] + delta_E
@@ -227,11 +223,11 @@ class Simulator:
 
         self.total_array[T, np.isclose(self.total_array[T, :], 0)] = 0   # it might be < 0
         
-        self.trans_array[T, TRANS.S2E] = S2E
-        self.trans_array[T, TRANS.E2I] = E2I
-        self.trans_array[T, TRANS.I2M] = I2M
-        self.trans_array[T, TRANS.I2O] = I2O
-        self.trans_array[T, TRANS.M2O] = M2O
+        self.trans_array[T, TRANS.S2E] = self.S2E
+        self.trans_array[T, TRANS.E2I] = self.E2I
+        self.trans_array[T, TRANS.I2M] = self.I2M
+        self.trans_array[T, TRANS.I2O] = self.I2O
+        self.trans_array[T, TRANS.M2O] = self.M2O
         self.trans_array[T, TRANS.EbyE] = self.E_by_E
         self.trans_array[T, TRANS.EbyI] = self.E_by_I
 
@@ -247,7 +243,8 @@ class Simulator:
             '{} != {}'.format(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum())
 
         # hospital should be not over-capacited
-        assert self.total_array[T, STATE.M] <= self.total_array[T, STATE.H]
+        m_val, h_val = self.total_array[T, STATE.M], self.total_array[T, STATE.H]
+        assert m_val <= h_val, '{} > {}'.format(m_val, h_val)
 
         assert ((self.total_array[T, :]) >= 0).all(), self.total_array[T, :]  # all values are non-neg
 
@@ -267,20 +264,21 @@ class Simulator:
         self.update_inf_probas(T)
         self.update_day_offsets(T)
 
-        S2E = self.get_S2E(T)
-        E2I = self.get_E2I(T)
-        I2O = self.get_I2O(T)
-        I2M = self.get_I2M(T)
-        M2O = self.get_M2O(T)
+        # get the transition count
+        self.update_S2E(T)
+        self.update_E2I(T)
+        self.update_I2O(T)
+        self.update_I2M(T)
+        self.update_M2O(T)
 
-        self.update_delta_plus_array(T, S2E, E2I, I2O, I2M, M2O)
-        self.update_I_array(T, E2I)
+        self.update_delta_plus_array(T)
+        self.update_I_array(T)
 
-        self.check_and_log(S2E, E2I, I2O, I2M, M2O)
+        self.check_and_log()
         
-        self.update_stage_stat(T, I2O)
+        self.update_stage_stat(T)
         
-        self.update_major_arrays(T, S2E, E2I, I2O, I2M, M2O)
+        self.update_other_major_arrays(T)
         self.check_total_arrays(T)
 
         self.print_current_total_info(T)
@@ -313,8 +311,8 @@ class Simulator:
                     for s in range(NUM_STATES):
                         self.total_array[T+1:, s] = self.total_array[T, s]
                 break
-        stats = self.get_stat()
-        return self.total_array, self.delta_array, delta_plus_array, self.trans_array, stats
+        stats = self.get_stats()
+        return self.total_array, self.delta_array, self.delta_plus_array, self.trans_array, stats
 
     """
     below are functions which gather simulation statistics
@@ -323,7 +321,7 @@ class Simulator:
         """get statistics of simulation run"""
         stats = dict()
 
-        stats['R0_by_stage'] = self.R0_by_stage()
+        stats['R0_by_stage'] = self.get_R0_by_stage()
         stats['end_time'] = self.get_end_time()
         stats['peak_time'] = self.get_peak_time()
         stats['when_dO_gt_dI'] = self.get_when_dO_gt_dI()
@@ -354,7 +352,7 @@ class Simulator:
         peak_time = (self.total_array[:, STATE.M] + self.total_array[:, STATE.I]).argmax()
         return (int(peak_time), self.plus_time_and_to_string(peak_time))
 
-    def get_dO_gt_dE(self):
+    def get_when_dO_gt_dE(self):
         """when delta_plus O > delta_plus E"""
         try:
             when_dO_gt_dI = (
@@ -395,7 +393,7 @@ class Simulator:
 
     def get_theoretical_turning_time(self):
         O = self.total_array[:, STATE.O]
-        IME = self.total_array[:, STATE.I] + self.total_array[:, STATE.M] + total_array[:, STATE.E]
+        IME = self.total_array[:, STATE.I] + self.total_array[:, STATE.M] + self.total_array[:, STATE.E]
         
         try:
             turning_time_theory = (O > IME).nonzero()[0].min()
