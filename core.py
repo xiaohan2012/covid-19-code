@@ -1,19 +1,26 @@
 
 import numpy as np
 from functools import partial
-from datetime import  datetime, timedelta
+from datetime import datetime, timedelta
 from tqdm import tqdm
 
-from helpers import  pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
+from helpers import pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
 from const import *
 
-def Simulator:
-    def __init__(self, params, total_days):
+
+class Simulator:
+    def __init__(self, params, p0_time, total_days, bed_info, show_bar=False, verbose=0):
         self.params = params
+        self.p0_time = p0_time
+        self.total_days = total_days
+        self.bed_info = bed_info
+        self.show_bar = show_bar
+        self.verbose = verbose
+        
         # T=0 is the day before simulation
-        pr_EI = partial(pr_EI_long, mu_ei=params.mu_ei, k=params.k_days)
-        pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
-        pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
+        self.pr_EI = partial(pr_EI_long, mu_ei=params.mu_ei, k=params.k_days)
+        self.pr_MO = partial(pr_MO_long, mu_mo=params.mu_mo, k=params.k_days)
+        self.pr_IM = partial(pr_IM_long, k=params.k_pt,  x0=params.x0_pt)
         
         self.num_stages = params.num_stages
         # used to calculate the R0 values for each stage
@@ -22,6 +29,10 @@ def Simulator:
 
         self.init()
 
+    def plus_time_and_to_string(days):
+        """return absoluate date, which is p0_time + days"""
+        return (self.p0_time + timedelta(days=int(days))).strftime('%d/%m/%y')
+        
     def init(self):
         self.create_total_array()
         self.create_delta_array()
@@ -30,7 +41,7 @@ def Simulator:
         self.populate_bed_info()
 
         self.create_I_array()
-
+        
     def create_total_array(self):
         # the total number of each state at each day
         self.total_array = np.zeros((self.total_days+1, NUM_STATES), dtype=float)
@@ -72,13 +83,13 @@ def Simulator:
 
     def create_I_array(self):
         # dynamic array recording the number of I at each day
-        num_in_I = np.zeros((total_days+1), dtype=float)
-        num_in_I[0] = params.initial_num_I
+        self.num_in_I = np.zeros((self.total_days+1), dtype=float)
+        self.num_in_I[0] = self.params.initial_num_I
 
     def update_inf_probas(self, T):
         """get infection probability at time T"""
-        self.inf_proba_E = min(1, total_array[T-1, STATE.E] * params.alpha_func(T-1))
-        self.inf_proba_I = min(1, total_array[T-1, STATE.I] * params.beta_func(T-1))
+        self.inf_proba_E = min(1, self.total_array[T-1, STATE.E] * self.params.alpha_func(T-1))
+        self.inf_proba_I = min(1, self.total_array[T-1, STATE.I] * self.params.beta_func(T-1))
 
         if np.isclose(self.inf_proba_E, 0):
             self.inf_proba_E = 0
@@ -136,13 +147,13 @@ def Simulator:
 
     def get_I2M(self, T):
         # I -> M: infected to hospitized
-        self.self.I2M_array = np.array(
+        self.I2M_array = np.array(
             [
                 self.pr_IM(T-1, t, self.total_array) * self.delta_plus_array[T-t, STATE.I]
                 for t in self.day_offsets
             ]
         )
-        I2M = np.sum(self.self.I2M_array)
+        I2M = np.sum(self.I2M_array)
 
         # if hospital is full now
         # I -> M is not allowed (no I goes to hospital)
@@ -151,15 +162,15 @@ def Simulator:
         
         return I2M
 
-    def get_M2O(T):
+    def get_M2O(self, T):
         # M -> O: hospitized to recovered/dead
-        M2O = np.sum([pr_MO(t) * delta_plus_array[T-t, STATE.M] for t in self.day_offsets])
+        M2O = np.sum([self.pr_MO(t) * self.delta_plus_array[T-t, STATE.M] for t in self.day_offsets])
         return M2O
 
     def update_delta_plus_array(self, T, S2E, E2I, I2O, I2M, M2O):
-        delta_plus_array[T, STATE.S] = 0
-        delta_plus_array[T, STATE.E] = S2E
-        delta_plus_array[T, STATE.I] = E2I
+        self.delta_plus_array[T, STATE.S] = 0
+        self.delta_plus_array[T, STATE.E] = S2E
+        self.delta_plus_array[T, STATE.I] = E2I
 
         # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
@@ -168,17 +179,17 @@ def Simulator:
         if (I2M - M2O) >= remaining_hospital_capacity:
             # if hospital is out of capcity
             I2M = remaining_hospital_capacity + M2O  # this many I goes to hospital
-            self.self.I2M_array = I2M / np.sum(self.self.I2M_array) * self.self.I2M_array
-            if verbose > 0:
+            self.I2M_array = I2M / np.sum(self.I2M_array) * self.I2M_array
+            if self.verbose > 0:
                 print('hospital is full')
 
-        delta_plus_array[T, STATE.M] = I2M  # bound I2M by remaining capacity
-        delta_plus_array[T, STATE.O] = M2O + I2O
+        self.delta_plus_array[T, STATE.M] = I2M  # bound I2M by remaining capacity
+        self.delta_plus_array[T, STATE.O] = M2O + I2O
 
     def update_I_array(self, T, E2I):
         # number of I on each day needs to be adjusted (due to I -> M)
         self.num_in_I[T] = E2I
-        self.num_in_I[T - np.array(self.day_offsets, dtype=int)] -= self.self.I2M_array
+        self.num_in_I[T - np.array(self.day_offsets, dtype=int)] -= self.I2M_array
 
     def check_and_log(self, S2E, E2I, I2O, I2M, M2O):
         # print and check the transition information
@@ -187,7 +198,7 @@ def Simulator:
                 v = 0
             # transition is non-negative
             assert v >= 0, f'{trans}: {v}'
-            if verbose > 0:
+            if self.verbose > 0:
                 print(f'{trans}: {v}')
 
         for v in [S2E, E2I, I2M, I2O, M2O]:
@@ -241,7 +252,7 @@ def Simulator:
         assert ((self.total_array[T, :]) >= 0).all(), self.total_array[T, :]  # all values are non-neg
 
     def print_current_total_info(self, T):
-        if verbose > 0:
+        if self.verbose > 0:
             for s, v in zip(STATES, self.total_array[T, :]):
                 print(f'{s}: {v}')
             print(self.total_array[T, :].sum())
@@ -254,6 +265,7 @@ def Simulator:
         
     def step(self, T):
         self.update_inf_probas(T)
+        self.update_day_offsets(T)
 
         S2E = self.get_S2E(T)
         E2I = self.get_E2I(T)
@@ -273,35 +285,127 @@ def Simulator:
 
         self.print_current_total_info(T)
 
-        self.update_total_infected()
-        self.update_O_fraction()
-        
-        
-    def iterate(self):
-        end_time = None
+        self.update_total_infected(T)
+        self.update_O_fraction(T)
 
-        iters = range(1, total_days+1)
+    def run(self):
+        self.end_time = None
 
-        if show_bar:
+        iters = range(1, self.total_days+1)
+
+        if self.show_bar:
             iters = tqdm(iters)
 
         for T in iters:
-            if verbose > 0:
+            if self.verbose > 0:
                 print('-' * 10)
                 print(f'at iteration {T}')
 
-            self.step()
-            if False and self.O_fraction >= 0.99:
-                end_time = T
+            self.step(T)
+
+            # fraction of out-of-system exceeds 0.99
+            # the simulation can stop
+            # all states fixed
+            if self.O_fraction >= 0.99:
+                self.end_time = T
                 print(f'O fraction  {O_fraction}')
-                # fraction of out-of-system exceeds 0.99
-                # the simulation can stop
-                # all states fixed
                 if (T+1) < self.total_array.shape[0]:
                     for s in range(NUM_STATES):
                         self.total_array[T+1:, s] = self.total_array[T, s]
                 break
+        stats = self.get_stat()
+        return self.total_array, self.delta_array, delta_plus_array, self.trans_array, stats
+
+    """
+    below are functions which gather simulation statistics
+    """
+    def get_stats(self):
+        """get statistics of simulation run"""
+        stats = dict()
+
+        stats['R0_by_stage'] = self.R0_by_stage()
+        stats['end_time'] = self.get_end_time()
+        stats['peak_time'] = self.get_peak_time()
+        stats['when_dO_gt_dI'] = self.get_when_dO_gt_dI()
+        stats['when_dO_gt_dE'] = self.get_when_dO_gt_dE()
+        stats['turning_time_real'] = self.get_real_turning_time()
+        stats['turning_time_theory'] = self.get_theoretical_turning_time()
+        return stats
+
+    def get_R0_by_stage(self):
+        """get the R0 value for each stage (e.g., every two weeks)"""
+        R0_by_stage = dict()
+        for s in range(self.num_stages):
+            T1, T2 = get_T1_and_T2(self.I2OM_by_days_by_stage[s], self.E2I_by_days_by_stage[s])
+            alpha, beta = self.params.get_alpha_beta_by_stage(s)
+            r0 = R0(self.params.total_population, alpha, beta, T1, T2)
+            R0_by_stage[s] = (float(T1), float(T2), float(r0))
+        return R0_by_stage
+
+    def get_end_time(self):
+        """when the epidemic ends, i.e., I and E are zero"""
+        if self.end_time is not None:
+            return (int(self.end_time), self.plus_time_and_to_string(self.end_time))
+        else:
+            return None
+
+    def get_peak_time(self):
+        """when the total infection count peaks"""
+        peak_time = (self.total_array[:, STATE.M] + self.total_array[:, STATE.I]).argmax()
+        return (int(peak_time), self.plus_time_and_to_string(peak_time))
+
+    def get_dO_gt_dE(self):
+        """when delta_plus O > delta_plus E"""
+        try:
+            when_dO_gt_dI = (
+                self.delta_plus_array[:, STATE.O] > self.delta_plus_array[:, STATE.I]
+            ).nonzero()[0].min()
+        except ValueError:
+            when_dO_gt_dI = None
+        ret = ((int(when_dO_gt_dI), self.plus_time_and_to_string(when_dO_gt_dI))
+               if when_dO_gt_dI is not None
+               else None)
+        return ret
+
+    def get_when_dO_gt_dI(self):
+        """when delta_plus O > delta_plus I"""
+        try:
+            when_dO_gt_dI = (
+                self.delta_plus_array[:, STATE.O] > self.delta_plus_array[:, STATE.I]
+            ).nonzero()[0].min()
+        except ValueError:
+            when_dO_gt_dI = None
+        ret = ((int(when_dO_gt_dI), self.plus_time_and_to_string(when_dO_gt_dI))
+               if when_dO_gt_dI is not None
+               else None)
+        return ret
+
+    def get_real_turning_time(self):
+        O = self.total_array[:, STATE.O]
+        IM = self.total_array[:, STATE.I] + self.total_array[:, STATE.M]
         
+        try:
+            turning_time_real = (O > IM).nonzero()[0].min()
+        except ValueError:
+            turning_time_real = None
+
+        return ((int(turning_time_real), self.plus_time_and_to_string(turning_time_real))
+                if turning_time_real is not None
+                else None)
+
+    def get_theoretical_turning_time(self):
+        O = self.total_array[:, STATE.O]
+        IME = self.total_array[:, STATE.I] + self.total_array[:, STATE.M] + total_array[:, STATE.E]
+        
+        try:
+            turning_time_theory = (O > IME).nonzero()[0].min()
+        except ValueError:
+            turning_time_theory = None
+        return ((int(turning_time_theory), self.plus_time_and_to_string(turning_time_theory))
+                if turning_time_theory is not None
+                else None)
+        
+
 def do_simulation(
         total_days, bed_info,
         params,
@@ -309,69 +413,7 @@ def do_simulation(
         show_bar=False,
         verbose=0
 ):
-    """
-    total_days: total number of days to simulate
-    bed_info: list of tuples (time T,  number of new  beds at T)
-    params: a Params object
-    """
-
-
-    def plus_time_and_to_string(days):
-        return (p0_time + timedelta(days=int(days))).strftime('%d/%m/%y')
-    
-    stats = dict()
-    R0_by_stage = dict()
-
-    # get the R0 value for each stage (e.g., two weeks)
-    for s in range(self.num_stages):
-        T1, T2 = get_T1_and_T2(self.I2OM_by_days_by_stage[s], self.E2I_by_days_by_stage[s])
-        alpha, beta = params.get_alpha_beta_by_stage(s)
-        r0 = R0(params.total_population, alpha, beta, T1, T2)
-        R0_by_stage[s] = (float(T1), float(T2), float(r0))
-    stats['R0_by_stage'] = R0_by_stage
-    if end_time:
-        stats['end_time'] = (int(end_time), plus_time_and_to_string(end_time))
-    else:
-        stats['end_time'] = None
-    peak_time = (total_array[:, STATE.M] + total_array[:, STATE.I]).argmax()
-    stats['peak_time'] = (int(peak_time), plus_time_and_to_string(peak_time))
-    
-    O = total_array[:, STATE.O]
-    IM = total_array[:, STATE.I] + total_array[:, STATE.M]
-    IME = IM + total_array[:, STATE.E]
-
-    try:
-        when_dO_gt_dI = (delta_plus_array[:, STATE.O] > delta_plus_array[:, STATE.I]).nonzero()[0].min()
-    except ValueError:
-        when_dO_gt_dI = None
-
-    try:
-        when_dO_gt_dE = (delta_plus_array[:, STATE.O] > delta_plus_array[:, STATE.E]).nonzero()[0].min()
-    except ValueError:
-        when_dO_gt_dE = None
-
-    try:
-        turning_time_real = (O > IM).nonzero()[0].min()
-    except ValueError:
-        turning_time_real = None
-
-    try:
-        turning_time_theory = (O > IME).nonzero()[0].min()
-    except ValueError:
-        turning_time_theory = None
-
-    stats['when_dO_gt_dI'] = ((int(when_dO_gt_dI), plus_time_and_to_string(when_dO_gt_dI))
-                              if when_dO_gt_dI is not None
-                              else None)
-    stats['when_dO_gt_dE'] = ((int(when_dO_gt_dE), plus_time_and_to_string(when_dO_gt_dE))
-                              if when_dO_gt_dE is not None
-                              else None)
-
-    stats['turning_time_real'] = ((int(turning_time_real), plus_time_and_to_string(turning_time_real))
-                                  if turning_time_real is not None
-                                  else None)
-    stats['turning_time_theory'] = ((int(turning_time_theory), plus_time_and_to_string(turning_time_theory))
-                                    if turning_time_theory is not None
-                                    else None)
-    
-    return total_array, delta_array, delta_plus_array, self.trans_array, stats
+    """wrapper function for simulation run, for backward compatability"""
+    sim = Simulator(params, p0_time, total_days, bed_info)
+    ret = sim.run()
+    return ret

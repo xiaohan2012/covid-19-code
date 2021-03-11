@@ -1,7 +1,10 @@
 import pickle as pkl
 
 from helpers import Params, T
-from core_old import do_simulation
+from core_old import do_simulation as do_simulation_old
+from core import do_simulation
+
+from numpy.testing import assert_almost_equal as assert_areq
 
 
 def get_input():
@@ -45,6 +48,18 @@ def get_input():
 
 def test_equivalence():
     p0_time, total_days, bed_info, params = get_input()
-    total, delta, increase, trans_data, stats = do_simulation(
+
+    total_actual, delta_actual, increase_actual, trans_data_actual, stats_actual = do_simulation(
         total_days, bed_info, params, p0_time=p0_time, verbose=0, show_bar=True
     )
+    
+    total_expected, delta_expected, increase_expected, trans_data_expected, stats_expected = do_simulation_old(
+        total_days, bed_info, params, p0_time=p0_time, verbose=0, show_bar=True
+    )
+
+    assert_areq(total_expected, total_actual)
+    assert_areq(delta_expected, delta_actual)
+    assert_areq(increase_expected, increase_actual)
+    assert_areq(trans_data_expected, trans_data_actual)
+    assert stats_actual == stats_expected
+
