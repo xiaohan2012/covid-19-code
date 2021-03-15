@@ -97,7 +97,7 @@ class Params:
         # I -> M: geoemtric
         self.x0_pt = x0_pt
         self.mean_IM = mean_IM
-        self.k_pt = np.log(mean_IM-1) / x0_pt  
+        self.k_pt = np.log(mean_IM-1) / x0_pt
         
         # M -> O: Poisson
         self.mu_mo = mu_mo
@@ -201,6 +201,76 @@ mean_IM: {self.mean_IM}
 
 k_days: {self.k_days}
         """
+
+
+class ParamsVac(Params):
+    def __init__(
+            self,
+            vac_time,
+            vac_count_per_day=50000,
+            time_to_take_effect=14,
+            s_proba=0.05,
+            v2_proba=0.7,
+            v1_proba=0.25,
+            ev1_to_r_time=14,
+            *args, **kwargs):
+        """
+        vac_time: time to vacinate the population
+        vac_count_per_day: how many people are vacinated per days
+        time_to_take_effect: how many days does the vacination take effect
+        s_proba: probability of transiting to S after vacination
+        v1_proba: probability of transiting to V1 (protected but can tranmit virus)  after vacination
+        v2_proba: probability of transiting to V2 (protected and cannot tranmit virus) after vacination
+        ev1_to_r_time: how many days does EV1 recover
+        """
+        self.vac_time = vac_time,
+        self.vac_count_per_day = vac_count_per_day
+        self.s_proba = s_proba
+        self.v2_proba = v2_proba
+        self.v1_proba = v1_proba
+        self.ev1_to_r_time = ev1_to_r_time
+        super(ParamsVac, self).__init__(*args, **kwargs)
+
+    def populate_gamma_array(self):
+        """gamma is the infection probability related to EV1"""
+        times = np.array([t for t, _ in self.gamma])
+        values = np.array([v for _, v in self.gamma])
+        
+        max_t = times.max()
+        self.gamma_array = np.zeros(max_t+1)
+        for value, t1, t2 in zip(values[:-1], times[:-1], times[1:]):
+            for i in range(t1, t2):
+                self.gamma_array[i] = value
+        self.gamma_array[max_t:] = values[-1]
+
+    def gamma_func(self, t):
+        if isinstance(self.gamma, float):
+            return self.gamma
+        elif isinstance(self.gamma, list):
+            if self.gamma_array is None:
+                self.populate_gamma_array()
+                
+            if t >= len(self.gamma_array):
+                return self.gamma_array[-1]
+            else:
+                return self.gamma_array[t]
+        else:
+            raise ValueError(f'cannot understand: {self.gamma}')
+
+    def __repr__(self):
+        s = super(ParamsVac, self).__repr__()
+        s_extra = """
+Vacination params:
+-----------------
+
+vac_time:          {}
+vac_count_per_day: {}
+s_proba:           {}
+v2_proba:          {}
+v1_proba:          {}
+ev1_to_r_time:     {}
+        """.format(vac_time, vac_count_per_day, s_proba, v2_proba, v1_proba, ev1_to_r_time)
+        return s + s_extra
 
 
 def T(s):
@@ -346,3 +416,5 @@ def save_bundle(bundle, p0_time, total_days, dir_name):
 def makedir_if_not_there(d):
     if not os.path.exists(d):
         os.makedirs(d)
+
+        
