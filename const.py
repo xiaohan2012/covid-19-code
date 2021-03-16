@@ -12,6 +12,10 @@ class STATE:
     O = 4  # out of system, dead  or cured
     H = 5  # maximum number of beds in hospital
 
+    all_states = ('S', 'E', 'I', 'M', 'O', 'H')
+    num_states = len(all_states)
+    colors = ['green', 'orange', 'red', 'pink', 'gray', 'blue']
+    
 
 class TRANS:
     S2E = 0
@@ -21,3 +25,15 @@ class TRANS:
     M2O = 4
     EbyE = 5
     EbyI = 6
+
+    num_trans = 7
+
+
+class STATES_VAC(STATE):
+    V = 6  # vaccinated (but not taking effect yet)
+    V1 = 7  # vaccinated but can transmit virus
+    V2 = 8  # vaccinated and cannot transmit virus
+    EV1 = 9  # V1 after becoming infected (without any symptom)
+
+    all_states = STATE.all_states + ('V', 'V1', 'V2', 'EV1')
+    num_states = len(all_states)

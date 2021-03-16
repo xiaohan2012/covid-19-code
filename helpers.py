@@ -182,7 +182,25 @@ class Params:
             t = self.stages[s] - 1
 
         return self.alpha_func(t), self.beta_func(t)
-    
+
+    @property
+    def kwargs(self):
+        """return the input parameters as a dict"""
+        return dict(
+            alpha=self.alpha,
+            beta=self.beta,
+            mu_ei=self.mu_ei,
+            mu_mo=self.mu_mo,
+            mean_IM=self.mean_IM,
+            x0_pt=self.x0_pt,
+            k_days=self.k_days,
+            total_population=self.total_population,
+            initial_num_E=self.initial_num_E,
+            initial_num_I=self.initial_num_I,
+            initial_num_M=self.initial_num_M,
+            stages=self.stages
+        )
+
     def __repr__(self):
         return f"""total_population: {self.total_population}
 initial_num_E: {self.initial_num_E}
@@ -206,14 +224,14 @@ k_days: {self.k_days}
 class ParamsVac(Params):
     def __init__(
             self,
-            vac_time,
+            vac_time=0,
             vac_count_per_day=50000,
             time_to_take_effect=14,
             s_proba=0.05,
             v2_proba=0.7,
             v1_proba=0.25,
             ev1_to_r_time=14,
-            *args, **kwargs):
+            **kwargs):
         """
         vac_time: time to vacinate the population
         vac_count_per_day: how many people are vacinated per days
@@ -223,13 +241,15 @@ class ParamsVac(Params):
         v2_proba: probability of transiting to V2 (protected and cannot tranmit virus) after vacination
         ev1_to_r_time: how many days does EV1 recover
         """
-        self.vac_time = vac_time,
+        super().__init__(**kwargs)
+        
+        self.vac_time = vac_time
         self.vac_count_per_day = vac_count_per_day
         self.s_proba = s_proba
         self.v2_proba = v2_proba
         self.v1_proba = v1_proba
         self.ev1_to_r_time = ev1_to_r_time
-        super(ParamsVac, self).__init__(*args, **kwargs)
+
 
     def populate_gamma_array(self):
         """gamma is the infection probability related to EV1"""
@@ -258,8 +278,9 @@ class ParamsVac(Params):
             raise ValueError(f'cannot understand: {self.gamma}')
 
     def __repr__(self):
-        s = super(ParamsVac, self).__repr__()
+        s = super().__repr__()
         s_extra = """
+-----------------
 Vacination params:
 -----------------
 
@@ -269,7 +290,14 @@ s_proba:           {}
 v2_proba:          {}
 v1_proba:          {}
 ev1_to_r_time:     {}
-        """.format(vac_time, vac_count_per_day, s_proba, v2_proba, v1_proba, ev1_to_r_time)
+        """.format(
+            self.vac_time,
+            self.vac_count_per_day,
+            self.s_proba,
+            self.v2_proba,
+            self.v1_proba,
+            self.ev1_to_r_time
+        )
         return s + s_extra
 
 
