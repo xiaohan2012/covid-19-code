@@ -1,5 +1,6 @@
 import json
 import os
+import numpy as np
 import pandas as pd
 import numpy as np
 import seaborn as sbn
@@ -228,7 +229,7 @@ k_days: {self.k_days}
 class ParamsVac(Params):
     def __init__(
             self,
-            vac_time=0,
+            vac_time=1,
             vac_count_per_day=50000,
             time_to_take_effect=14,
             s_proba=0.05,
@@ -249,12 +250,16 @@ class ParamsVac(Params):
         (type): float or list of (time/int, value/float)
         """
         super().__init__(**kwargs)
-        
+
+        assert vac_time > 0
         self.vac_time = vac_time
+
         self.vac_count_per_day = vac_count_per_day
         self.s_proba = s_proba
         self.v2_proba = v2_proba
         self.v1_proba = v1_proba
+        assert np.isclose(self.s_proba + self.v2_proba + self.v1_proba, 1.0), 'vaccination probas not summing up to 1'
+
         self.ev1_to_r_time = ev1_to_r_time
         self.gamma = gamma
 

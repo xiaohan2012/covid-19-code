@@ -70,6 +70,9 @@ class Simulator:
         self.delta_array[0, self.state_space.M] = self.params.initial_num_M
 
     def create_delta_plus_array(self):
+        """
+        an array that only counts the population that moves *into* each state
+        """
         self.delta_plus_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
         self.delta_plus_array[0, self.state_space.S] = self.params.total_population
         self.delta_plus_array[0, self.state_space.E] = self.params.initial_num_E
@@ -141,6 +144,7 @@ class Simulator:
         self.E_by_I = self.inf_proba_I * self.total_array[T-1, self.state_space.S]
 
         # each element is the number of infections from E to I at a specific day in the past
+        print('self.delta_plus_array[:, E]', self.delta_plus_array[:, self.state_space.E])
         self.E2I_array = [
             self.pr_EI(t) * self.delta_plus_array[T-t, self.state_space.E]
             for t in self.day_offsets
@@ -156,6 +160,7 @@ class Simulator:
             self.num_in_I[T - self.params.k_days - 1] = 0
         else:
             self.I2O = 0
+        print('I2O', self.I2O)
 
     def update_I2M(self, T):
         # I -> M: infected to hospitized
@@ -230,21 +235,23 @@ class Simulator:
         self.I2OM_by_days_by_stage[stage][:len(self.I2M_array)] += self.I2M_array
         self.I2OM_by_days_by_stage[stage][-1] += self.I2O
 
-    def update_other_major_arrays(self, T):
-        delta_S = -self.S2E
-        delta_E = self.S2E - self.E2I
-        delta_I = self.E2I - self.I2M - self.I2O
-        delta_M = self.I2M - self.M2O
-        delta_O = self.I2O + self.M2O
+    def update_deltas(self, T):
+        self.delta_S = -self.S2E
+        self.delta_E = self.S2E - self.E2I
+        self.delta_I = self.E2I - self.I2M - self.I2O
+        self.delta_M = self.I2M - self.M2O
+        self.delta_O = self.I2O + self.M2O
 
-        self.total_array[T, self.state_space.S] = self.total_array[T-1, self.state_space.S] + delta_S
-        self.total_array[T, self.state_space.E] = self.total_array[T-1, self.state_space.E] + delta_E
-        self.total_array[T, self.state_space.I] = self.total_array[T-1, self.state_space.I] + delta_I
-        self.total_array[T, self.state_space.M] = self.total_array[T-1, self.state_space.M] + delta_M
-        self.total_array[T, self.state_space.O] = self.total_array[T-1, self.state_space.O] + delta_O
+    def update_total_array(self, T):
+        self.total_array[T, self.state_space.S] = self.total_array[T-1, self.state_space.S] + self.delta_S
+        self.total_array[T, self.state_space.E] = self.total_array[T-1, self.state_space.E] + self.delta_E
+        self.total_array[T, self.state_space.I] = self.total_array[T-1, self.state_space.I] + self.delta_I
+        self.total_array[T, self.state_space.M] = self.total_array[T-1, self.state_space.M] + self.delta_M
+        self.total_array[T, self.state_space.O] = self.total_array[T-1, self.state_space.O] + self.delta_O
 
         self.total_array[T, np.isclose(self.total_array[T, :], 0)] = 0   # it might be < 0
-        
+
+    def update_trans_array(self, T):
         self.trans_array[T, self.trans_space.S2E] = self.S2E
         self.trans_array[T, self.trans_space.E2I] = self.E2I
         self.trans_array[T, self.trans_space.I2M] = self.I2M
@@ -253,12 +260,13 @@ class Simulator:
         self.trans_array[T, self.trans_space.EbyE] = self.E_by_E
         self.trans_array[T, self.trans_space.EbyI] = self.E_by_I
 
-        self.delta_array[T, self.state_space.S] = delta_S
-        self.delta_array[T, self.state_space.E] = delta_E
-        self.delta_array[T, self.state_space.I] = delta_I
-        self.delta_array[T, self.state_space.M] = delta_M
-        self.delta_array[T, self.state_space.O] = delta_O
-
+    def update_delta_array(self, T):
+        self.delta_array[T, self.state_space.S] = self.delta_S
+        self.delta_array[T, self.state_space.E] = self.delta_E
+        self.delta_array[T, self.state_space.I] = self.delta_I
+        self.delta_array[T, self.state_space.M] = self.delta_M
+        self.delta_array[T, self.state_space.O] = self.delta_O
+        
     def check_total_arrays(self, T):
         # the population size (regardless of states) should not change
         assert np.isclose(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum()), \
@@ -272,7 +280,7 @@ class Simulator:
 
     def print_current_total_info(self, T):
         if self.verbose > 0:
-            for s, v in zip(STATES, self.total_array[T, :]):
+            for s, v in zip(self.state_space.all_states, self.total_array[T, :]):
                 print(f'{s}: {v}')
             print(self.total_array[T, :].sum())
     
@@ -299,10 +307,14 @@ class Simulator:
         self.check_and_log()
         
         self.update_stage_stat(T)
-        
-        self.update_other_major_arrays(T)
-        self.check_total_arrays(T)
 
+        self.update_deltas(T)
+        self.update_total_array(T)
+        self.check_total_arrays(T)
+        
+        self.update_delta_array(T)
+        self.update_trans_array(T)
+        
         self.print_current_total_info(T)
 
         self.update_total_infected(T)
@@ -310,7 +322,7 @@ class Simulator:
 
     def run(self):
         self.end_time = None
-
+        print('total_days', self.total_days)
         iters = range(1, self.total_days+1)
 
         if self.show_bar:
@@ -494,7 +506,9 @@ class SimulatorWithVaccination(Simulator):
         # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
         # when there are more people that needs to go to hospital than the hospital capacity
-        remaining_hospital_capacity = self.total_array[T-1, self.state_space.H] - self.total_array[T-1, self.state_space.M]
+        remaining_hospital_capacity = (
+            self.total_array[T-1, self.state_space.H] - self.total_array[T-1, self.state_space.M]
+        )
         if (self.I2M - self.M2O) >= remaining_hospital_capacity:
             # if hospital is out of capcity
             # NOTE: I2M is change here!
@@ -504,7 +518,7 @@ class SimulatorWithVaccination(Simulator):
                 print('hospital is full')
 
         self.delta_plus_array[T, self.state_space.M] = self.I2M  # bound self.I2M by remaining capacity
-        self.delta_plus_array[T, self.state_space.O] = self.M2O + self.I2O 
+        self.delta_plus_array[T, self.state_space.O] = self.M2O + self.I2O
 
     def check_and_log(self):
         # print and check the transition information
@@ -522,41 +536,46 @@ class SimulatorWithVaccination(Simulator):
             assert not np.isnan(v)
             assert not np.isinf(v)
 
-
-    def update_other_major_arrays(self, T):
-        delta_S = -self.S2E
-        delta_E = self.S2E - self.E2I
-        delta_I = self.E2I - self.I2M - self.I2O
-        delta_M = self.I2M - self.M2O
-        delta_O = self.I2O + self.M2O
-
-        self.total_array[T, self.state_space.S] = self.total_array[T-1, self.state_space.S] + delta_S
-        self.total_array[T, self.state_space.E] = self.total_array[T-1, self.state_space.E] + delta_E
-        self.total_array[T, self.state_space.I] = self.total_array[T-1, self.state_space.I] + delta_I
-        self.total_array[T, self.state_space.M] = self.total_array[T-1, self.state_space.M] + delta_M
-        self.total_array[T, self.state_space.O] = self.total_array[T-1, self.state_space.O] + delta_O
-
+    def update_total_array(self, T):
+        super().update_total_array(T)
+        self.total_array[T, self.state_space.V] = self.total_array[T-1, self.state_space.V] + self.delta_V
         self.total_array[T, np.isclose(self.total_array[T, :], 0)] = 0   # it might be < 0
-        
-        self.trans_array[T, self.trans_space.S2E] = self.S2E
-        self.trans_array[T, self.trans_space.E2I] = self.E2I
-        self.trans_array[T, self.trans_space.I2M] = self.I2M
-        self.trans_array[T, self.trans_space.I2O] = self.I2O
-        self.trans_array[T, self.trans_space.M2O] = self.M2O
-        self.trans_array[T, self.trans_space.EbyE] = self.E_by_E
-        self.trans_array[T, self.trans_space.EbyI] = self.E_by_I
 
-        self.delta_array[T, self.state_space.S] = delta_S
-        self.delta_array[T, self.state_space.E] = delta_E
-        self.delta_array[T, self.state_space.I] = delta_I
-        self.delta_array[T, self.state_space.M] = delta_M
-        self.delta_array[T, self.state_space.O] = delta_O
+    def update_delta_array(self, T):
+        super().update_delta_array(T)
+        self.delta_array[T, self.state_space.V] = self.delta_V
+
+    def update_delta_plus_array(self, T):
+        super().update_delta_plus_array(T)
+        self.delta_plus_array[T, self.state_space.V] = self.S2V
+        
+    def update_deltas(self, T):
+        self.delta_S = - self.S2E - self.S2V + self.V2S
+        self.delta_E = self.S2E - self.E2I
+        self.delta_I = self.E2I - self.I2M - self.I2O
+        self.delta_M = self.I2M - self.M2O
+        self.delta_O = self.I2O + self.M2O
+
+        self.delta_V = self.S2V - self.V2S
 
     def update_S2V(self, T):
-        self.S2V = min(
-            self.total_array[T-1, self.state_space.S],
-            self.vac_count_per_day
-        )
+        if T >= self.params.vac_time:
+            self.S2V = min(
+                self.total_array[T-1, self.state_space.S],
+                self.params.vac_count_per_day
+            )
+        else:
+            self.S2V = 0
+        print('self.S2V', self.S2V)
+            
+    def update_V2S(self, T):
+        self.V2S = 0
+
+    def update_V_to_V1(self, T):
+        self.V_to_V1 = 0
+        
+    def update_V_to_V2(self, T):
+        self.V_to_V2 = 0
         
     def step(self, T):
         self.update_inf_probas(T)
@@ -583,8 +602,12 @@ class SimulatorWithVaccination(Simulator):
         
         self.update_stage_stat(T)
         
-        self.update_other_major_arrays(T)
+        self.update_deltas(T)
+        self.update_total_array(T)
         self.check_total_arrays(T)
+        
+        self.update_delta_array(T)
+        self.update_trans_array(T)
 
         self.print_current_total_info(T)
 
