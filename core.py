@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 
 from helpers import pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
-from const import STATE, TRANS
+from const import STATE, TRANS, STATE_VAC, TRANS_VAC
 
 
 class Simulator:
@@ -133,7 +133,10 @@ class Simulator:
         self.E_by_I = self.inf_proba_I * self.total_array[T-1, self.state_space.S]
 
         # each element is the number of infections from E to I at a specific day in the past
-        self.E2I_array = [self.pr_EI(t) * self.delta_plus_array[T-t, self.state_space.E] for t in self.day_offsets]
+        self.E2I_array = [
+            self.pr_EI(t) * self.delta_plus_array[T-t, self.state_space.E]
+            for t in self.day_offsets
+        ]
         
         self.E2I = np.sum(self.E2I_array)
 
@@ -163,7 +166,10 @@ class Simulator:
 
     def update_M2O(self, T):
         # M -> O: hospitized to recovered/dead
-        self.M2O = np.sum([self.pr_MO(t) * self.delta_plus_array[T-t, self.state_space.M] for t in self.day_offsets])
+        self.M2O = np.sum([
+            self.pr_MO(t) * self.delta_plus_array[T-t, self.state_space.M]
+            for t in self.day_offsets
+        ])
 
     def update_delta_plus_array(self, T):
         self.delta_plus_array[T, self.state_space.S] = 0
@@ -173,7 +179,10 @@ class Simulator:
         # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
         # when there are more people that needs to go to hospital than the hospital capacity
-        remaining_hospital_capacity = self.total_array[T-1, self.state_space.H] - self.total_array[T-1, self.state_space.M]
+        remaining_hospital_capacity = (
+            self.total_array[T-1, self.state_space.H]
+            - self.total_array[T-1, self.state_space.M]
+        )
         if (self.I2M - self.M2O) >= remaining_hospital_capacity:
             # if hospital is out of capcity
             # NOTE: I2M is change here!
@@ -423,37 +432,22 @@ def do_simulation(
 
 
 class SimulatorWithVaccination(Simulator):
+    def init_state_space(self):
+        self.state_space = STATE_VAC
+        self.trans_space = TRANS_VAC
+
     def create_total_array(self):
         # the total number of each state at each day
-        self.total_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.total_array[0, self.state_space.S] = self.params.total_population
-        self.total_array[0, self.state_space.E] = self.params.initial_num_E
-        self.total_array[0, self.state_space.I] = self.params.initial_num_I
-        self.total_array[0, self.state_space.M] = self.params.initial_num_M
-
+        super().create_total_array()
+        
     def create_delta_array(self):
-        self.delta_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.delta_array[0, self.state_space.S] = self.params.total_population
-        self.delta_array[0, self.state_space.E] = self.params.initial_num_E
-        self.delta_array[0, self.state_space.I] = self.params.initial_num_I
-        self.delta_array[0, self.state_space.M] = self.params.initial_num_M
+        super().create_delta_array()
 
     def create_delta_plus_array(self):
-        self.delta_plus_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.delta_plus_array[0, self.state_space.S] = self.params.total_population
-        self.delta_plus_array[0, self.state_space.E] = self.params.initial_num_E
-        self.delta_plus_array[0, self.state_space.I] = self.params.initial_num_I
-        self.delta_plus_array[0, self.state_space.M] = self.params.initial_num_M
+        super().create_delta_plus_array()
 
     def create_trans_array(self):
-        self.trans_array = np.zeros((self.total_days+1, self.trans_space.num_trans), dtype=float)
-        self.trans_array[0, self.trans_space.S2E] = 0
-        self.trans_array[0, self.trans_space.E2I] = 0
-        self.trans_array[0, self.trans_space.I2M] = 0
-        self.trans_array[0, self.trans_space.I2O] = 0
-        self.trans_array[0, self.trans_space.M2O] = 0
-        self.trans_array[0, self.trans_space.EbyE] = 0
-        self.trans_array[0, self.trans_space.EbyI] = 0
+        super().create_trans_array()
 
     def update_inf_probas(self, T):
         """get infection probability at time T"""
@@ -482,7 +476,7 @@ class SimulatorWithVaccination(Simulator):
             (self.total_array[T-1, self.state_space.E], self.params.alpha_func(T-1), self.inf_proba_E)
         assert self.inf_proba_I <= 1, \
             (self.total_array[T-1, self.state_space.I], self.params.beta_func(T-1),  self.inf_proba_I)
-        assert self.inf_proba <= 1        
+        assert self.inf_proba <= 1
 
     def update_delta_plus_array(self, T):
         self.delta_plus_array[T, self.state_space.S] = 0

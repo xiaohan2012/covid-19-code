@@ -119,7 +119,11 @@ class Params:
             return self.num_stages - 1
     
     def populate_alpha_array(self):
-        """create an array which stores alpha values for each day"""
+        """
+        create an array which stores alpha values for each day
+
+        assuming alpha is given as a list of tuples (time, value)
+        """
         times = np.array([t for t, _ in self.alpha])
         values = np.array([v for _, v in self.alpha])  # alpha values
         
@@ -231,15 +235,18 @@ class ParamsVac(Params):
             v2_proba=0.7,
             v1_proba=0.25,
             ev1_to_r_time=14,
+            gamma=0.001,
             **kwargs):
         """
         vac_time: time to vacinate the population
         vac_count_per_day: how many people are vacinated per days
         time_to_take_effect: how many days does the vacination take effect
         s_proba: probability of transiting to S after vacination
-        v1_proba: probability of transiting to V1 (protected but can tranmit virus)  after vacination
+        v1_proba: probability of transiting to V1 (protected but can tranmit virus after becoming EV1)  after vacination
         v2_proba: probability of transiting to V2 (protected and cannot tranmit virus) after vacination
         ev1_to_r_time: how many days does EV1 recover
+        gamma: infection coefficient related to EV1
+        (type): float or list of (time/int, value/float)
         """
         super().__init__(**kwargs)
         
@@ -249,7 +256,9 @@ class ParamsVac(Params):
         self.v2_proba = v2_proba
         self.v1_proba = v1_proba
         self.ev1_to_r_time = ev1_to_r_time
+        self.gamma = gamma
 
+        self.gamma_array = None
 
     def populate_gamma_array(self):
         """gamma is the infection probability related to EV1"""
@@ -281,7 +290,7 @@ class ParamsVac(Params):
         s = super().__repr__()
         s_extra = """
 -----------------
-Vacination params:
+Vaccination params:
 -----------------
 
 vac_time:          {}
@@ -290,13 +299,15 @@ s_proba:           {}
 v2_proba:          {}
 v1_proba:          {}
 ev1_to_r_time:     {}
+gamma:             {}
         """.format(
             self.vac_time,
             self.vac_count_per_day,
             self.s_proba,
             self.v2_proba,
             self.v1_proba,
-            self.ev1_to_r_time
+            self.ev1_to_r_time,
+            self.gamma
         )
         return s + s_extra
 

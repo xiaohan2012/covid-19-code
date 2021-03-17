@@ -29,7 +29,7 @@ class TRANS:
     num_trans = 7
 
 
-class STATES_VAC(STATE):
+class STATE_VAC(STATE):
     V = 6  # vaccinated (but not taking effect yet)
     V1 = 7  # vaccinated but can transmit virus
     V2 = 8  # vaccinated and cannot transmit virus
@@ -37,3 +37,15 @@ class STATES_VAC(STATE):
 
     all_states = STATE.all_states + ('V', 'V1', 'V2', 'EV1')
     num_states = len(all_states)
+
+
+class TRANS_VAC(TRANS):
+    S2V = 7
+    V2S = 8
+    V_to_V1 = 9
+    V_to_V2 = 10
+    V1_to_EV1 = 11
+    EV1_to_R = 12
+    V2_to_R = 13
+
+    num_trans = TRANS.num_trans + 7
