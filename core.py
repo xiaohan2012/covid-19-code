@@ -4,12 +4,19 @@ from functools import partial
 from datetime import datetime, timedelta
 from tqdm import tqdm
 
-from helpers import pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0
+from helpers import pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0, T
 from const import STATE, TRANS, STATE_VAC, TRANS_VAC
 
 
 class Simulator:
-    def __init__(self, params, p0_time, total_days, bed_info, show_bar=False, verbose=0):
+    def __init__(
+            self, params,
+            p0_time=T('1/1/1970'),
+            total_days=100,
+            bed_info=None,
+            show_bar=False,
+            verbose=0
+    ):
         self.params = params
         self.p0_time = p0_time
         self.total_days = total_days
@@ -80,9 +87,10 @@ class Simulator:
         self.trans_array[0, self.trans_space.EbyI] = 0
 
     def populate_bed_info(self):
-        for T, num in self.bed_info:
-            self.delta_array[T, self.state_space.H] = num
-            self.delta_plus_array[T, self.state_space.H] = num
+        if self.bed_info is not None:
+            for T, num in self.bed_info:
+                self.delta_array[T, self.state_space.H] = num
+                self.delta_plus_array[T, self.state_space.H] = num
             
         self.total_array[:, self.state_space.H] = np.cumsum(self.delta_plus_array[:, self.state_space.H])
 
@@ -544,6 +552,12 @@ class SimulatorWithVaccination(Simulator):
         self.delta_array[T, self.state_space.M] = delta_M
         self.delta_array[T, self.state_space.O] = delta_O
 
+    def update_S2V(self, T):
+        self.S2V = min(
+            self.total_array[T-1, self.state_space.S],
+            self.vac_count_per_day
+        )
+        
     def step(self, T):
         self.update_inf_probas(T)
         self.update_day_offsets(T)
