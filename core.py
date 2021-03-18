@@ -539,15 +539,22 @@ class SimulatorWithVaccination(Simulator):
     def update_total_array(self, T):
         super().update_total_array(T)
         self.total_array[T, self.state_space.V] = self.total_array[T-1, self.state_space.V] + self.delta_V
+        self.total_array[T, self.state_space.V1] = self.total_array[T-1, self.state_space.V1] + self.delta_V1
+        self.total_array[T, self.state_space.V2] = self.total_array[T-1, self.state_space.V2] + self.delta_V2
+
         self.total_array[T, np.isclose(self.total_array[T, :], 0)] = 0   # it might be < 0
 
     def update_delta_array(self, T):
         super().update_delta_array(T)
         self.delta_array[T, self.state_space.V] = self.delta_V
+        self.delta_array[T, self.state_space.V1] = self.delta_V1
+        self.delta_array[T, self.state_space.V2] = self.delta_V2
 
     def update_delta_plus_array(self, T):
         super().update_delta_plus_array(T)
         self.delta_plus_array[T, self.state_space.V] = self.S2V
+        self.delta_plus_array[T, self.state_space.V1] = self.V_to_V1
+        self.delta_plus_array[T, self.state_space.V2] = self.V_to_V2
         
     def update_deltas(self, T):
         self.delta_S = - self.S2E - self.S2V + self.V2S
@@ -556,7 +563,9 @@ class SimulatorWithVaccination(Simulator):
         self.delta_M = self.I2M - self.M2O
         self.delta_O = self.I2O + self.M2O
 
-        self.delta_V = self.S2V - self.V2S
+        self.delta_V = self.S2V - self.V2S - self.V_to_V1 - self.V_to_V2
+        self.delta_V1 = self.V_to_V1
+        self.delta_V2 = self.V_to_V2
 
     def update_S2V(self, T):
         if T >= self.params.vac_time:
@@ -567,15 +576,37 @@ class SimulatorWithVaccination(Simulator):
         else:
             self.S2V = 0
         print('self.S2V', self.S2V)
-            
+
+    # def update_days_since_vaccination(self, T):
+    #     """how many days have passed since vaccination starts"""
+    #     self.days_since_vaccination = T - self.params.vac_time
+
+    # def whether_vaccination_takes_effect(self, T):
+    #     """
+    #     return bool, whether vaccination starts to take effect"""
+
+    #     return (days_since_vaccination >= self.params.time_to_take_effect)
+
     def update_V2S(self, T):
-        self.V2S = 0
+        t = T - self.params.time_to_take_effect
+        if t >= self.params.vac_time:
+            self.V2S = self.delta_plus_array[t, self.state_space.V] * self.params.s_proba
+        else:
+            self.V2S = 0
 
     def update_V_to_V1(self, T):
-        self.V_to_V1 = 0
+        t = T - self.params.time_to_take_effect
+        if t >= self.params.vac_time:
+            self.V_to_V1 = self.delta_plus_array[t, self.state_space.V] * self.params.v1_proba
+        else:
+            self.V_to_V1 = 0
         
     def update_V_to_V2(self, T):
-        self.V_to_V2 = 0
+        t = T - self.params.time_to_take_effect
+        if t >= self.params.vac_time:
+            self.V_to_V2 = self.delta_plus_array[t, self.state_space.V] * self.params.v2_proba
+        else:
+            self.V_to_V2 = 0
         
     def step(self, T):
         self.update_inf_probas(T)

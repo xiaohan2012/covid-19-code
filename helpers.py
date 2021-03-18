@@ -253,6 +253,7 @@ class ParamsVac(Params):
 
         assert vac_time > 0
         self.vac_time = vac_time
+        self.time_to_take_effect = time_to_take_effect
 
         self.vac_count_per_day = vac_count_per_day
         self.s_proba = s_proba
