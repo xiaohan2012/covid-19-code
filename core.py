@@ -178,24 +178,8 @@ class Simulator:
                 for t in self.day_offsets
             ]
         )
+        # initial value for I2M, before considering hospital capacity
         self.I2M = np.sum(self.I2M_array)
-
-        # if hospital is full now
-        # I -> M is not allowed (no I goes to hospital)
-        if self.total_array[T-1,  self.state_space.M] == self.total_array[T-1, self.state_space.H]:
-            assert self.I2M == 0
-
-    def update_M2O(self, T):
-        # M -> O: hospitized to recovered/dead
-        self.M2O = np.sum([
-            self.pr_MO(t) * self.delta_plus_array[T-t, self.state_space.M]
-            for t in self.day_offsets
-        ])
-
-    def update_delta_plus_array(self, T):
-        self.delta_plus_array[T, self.state_space.S] = 0
-        self.delta_plus_array[T, self.state_space.E] = self.S2E
-        self.delta_plus_array[T, self.state_space.I] = self.E2I
 
         # some special attention regarding I -> M or O (due to hospital capacity)
         # some patients need to stay at home
@@ -212,6 +196,26 @@ class Simulator:
             if self.verbose > 0:
                 print('hospital is full')
 
+        # if hospital is full now
+        # I -> M is not allowed (no I goes to hospital)
+        # print('M=', self.total_array[T-1,  self.state_space.M], 'H=', self.total_array[T-1, self.state_space.H])
+        # print('I2M', self.I2M)
+        if self.total_array[T-1,  self.state_space.M] == self.total_array[T-1, self.state_space.H]:
+            assert self.I2M == 0
+
+    def update_M2O(self, T):
+        # M -> O: hospitized to recovered/dead
+        self.M2O = np.sum([
+            self.pr_MO(t) * self.delta_plus_array[T-t, self.state_space.M]
+            for t in self.day_offsets
+        ])
+
+    def update_delta_plus_array(self, T):
+        self.delta_plus_array[T, self.state_space.S] = 0
+        self.delta_plus_array[T, self.state_space.E] = self.S2E
+        self.delta_plus_array[T, self.state_space.I] = self.E2I
+
+
         self.delta_plus_array[T, self.state_space.M] = self.I2M  # bound self.I2M by remaining capacity
         self.delta_plus_array[T, self.state_space.O] = self.M2O + self.I2O
 
@@ -225,6 +229,8 @@ class Simulator:
         for trans, v in zip(
                 ('S->E', 'E->I', 'I->O', 'I->M', 'M->O'),
                 (self.S2E, self.E2I, self.I2O, self.I2M, self.M2O)):
+            if np.isclose(v, 0):
+                v = 0
             # transition is non-negative
             assert v >= 0, f'{trans}: {v}'
             if self.verbose > 0:
@@ -275,7 +281,8 @@ class Simulator:
         
     def check_total_arrays(self, T):
         # the population size (regardless of states) should not change
-        print('total_array', self.total_array)
+        # print('total_array', self.total_array)
+        # print('self.total_array[T, :-1]', self.total_array[T, :-1])        
         assert np.isclose(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum()), \
             '{} != {}'.format(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum())
 
@@ -305,8 +312,8 @@ class Simulator:
         self.update_S2E(T)
         self.update_E2I(T)
         self.update_I2O(T)
-        self.update_I2M(T)
         self.update_M2O(T)
+        self.update_I2M(T)
 
         self.update_delta_plus_array(T)
         self.update_I_array(T)
@@ -680,8 +687,9 @@ class SimulatorWithVaccination(Simulator):
         self.update_S2E(T)
         self.update_E2I(T)
         self.update_I2O(T)
-        self.update_I2M(T)
         self.update_M2O(T)
+        self.update_I2M(T)
+
 
         self.update_delta_plus_array(T)
         self.update_I_array(T)

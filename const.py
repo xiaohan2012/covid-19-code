@@ -29,15 +29,25 @@ class TRANS:
     num_trans = 7
 
 
-class STATE_VAC(STATE):
-    V = 6  # vaccinated (but not taking effect yet)
-    V1 = 7  # vaccinated but can transmit virus
-    V2 = 8  # vaccinated and cannot transmit virus
-    EV1 = 9  # V1 after becoming infected (without any symptom)
+class STATE_VAC:
+    S = 0  # susceptible
+    E = 1  # exposed without symptom
+    I = 2  # infected and with symptom
+    M = 3  # with medical care
+    O = 4  # out of system, dead  or cured
+    
+    V = 5  # vaccinated (but not taking effect yet)
+    V1 = 6  # vaccinated but can transmit virus
+    V2 = 7  # vaccinated and cannot transmit virus
+    EV1 = 8  # V1 after becoming infected (without any symptom)
 
-    all_states = STATE.all_states + ('V', 'V1', 'V2', 'EV1')
+    H = 9  # maximum number of beds in hospital
+    
+    all_states = ('S', 'E', 'I', 'M', 'O') + ('V', 'V1', 'V2', 'EV1') + ('H', )
     num_states = len(all_states)
 
+    colors = ['green', 'orange', 'red', 'pink', 'gray', 'blue']
+    
 
 class TRANS_VAC(TRANS):
     S2V = 7
