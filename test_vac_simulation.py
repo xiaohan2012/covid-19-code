@@ -265,7 +265,7 @@ def test_worst_possible_vaccination_1(infectiousless_params):
         [0, 0, 0, 0, 0, 0, 0]
     )
 
-# TODO    
+
 def test_worst_possible_vaccination_2(infectiousless_params):
     """test case: no infection + worst possible vaccination (s_proba = 1.0)
     time for vaccination to take effect is 2 days
@@ -288,32 +288,32 @@ def test_worst_possible_vaccination_2(infectiousless_params):
     # check S array
     np.testing.assert_almost_equal(
         sim.total_array[:, sim.state_space.S],
-        [5, 5, 3, 3, 3, 3, 3]
+        [5, 5, 3, 1, 2, 2, 1]
     )
     np.testing.assert_almost_equal(
         sim.delta_array[:, sim.state_space.S],
-        [5, 0, -2, 0, 0, 0, 0]
+        [5, 0, -2, -2, 1, 0, -1]
     )
 
     np.testing.assert_almost_equal(
         sim.delta_plus_array[:, sim.state_space.S],
-        [5, 0, 0, 0, 2, 2, 2]
+        [5, 0, 0, 0, 2, 2, 1]
     )
 
     # check V array
     np.testing.assert_almost_equal(
         sim.total_array[:, sim.state_space.V],
-        [0, 0, 0, 2, 2, 2, 2]
+        [0, 0, 2, 4, 3, 3, 4]
     )
 
     np.testing.assert_almost_equal(
         sim.delta_array[:, sim.state_space.V],
-        [0, 0, 0, 2, 0, 0, 0]
+        [0, 0, 2, 2, -1, 0, 1]
     )
 
     np.testing.assert_almost_equal(
         sim.delta_plus_array[:, sim.state_space.V],
-        [0, 0, 2, 2, 2, 2, 2]
+        [0, 0, 2, 2, 1, 2, 2]
     )
 
     # check V1 array
