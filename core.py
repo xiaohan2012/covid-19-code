@@ -552,6 +552,7 @@ class SimulatorWithVaccination(Simulator):
 
     def update_delta_plus_array(self, T):
         super().update_delta_plus_array(T)
+        self.delta_plus_array[T, self.state_space.S] = self.V2S  # some vaccinations are ineffective
         self.delta_plus_array[T, self.state_space.V] = self.S2V
         self.delta_plus_array[T, self.state_space.V1] = self.V_to_V1
         self.delta_plus_array[T, self.state_space.V2] = self.V_to_V2
