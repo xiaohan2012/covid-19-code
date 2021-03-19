@@ -47,7 +47,7 @@ def truncated_poisson(x, mu, min_x, max_x):
     assert x <= max_x
     all_probas = np.array([poisson.pmf(xi, mu) for xi in range(min_x, max_x+1)])
     all_probas /= all_probas.sum()
-    assert np.isclose(all_probas.sum(), 1)
+    assert np.isclose(all_probas.sum(), 1), all_probas
     return all_probas[x-min_x]
 
 

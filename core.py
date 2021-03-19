@@ -57,14 +57,20 @@ class Simulator:
     def create_total_array(self):
         # the total number of each state at each day
         self.total_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.total_array[0, self.state_space.S] = self.params.total_population
+        self.total_array[0, self.state_space.S] = (
+            self.params.total_population - self.params.initial_num_E
+            - self.params.initial_num_I - self.params.initial_num_M
+        )
         self.total_array[0, self.state_space.E] = self.params.initial_num_E
         self.total_array[0, self.state_space.I] = self.params.initial_num_I
         self.total_array[0, self.state_space.M] = self.params.initial_num_M
 
     def create_delta_array(self):
         self.delta_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.delta_array[0, self.state_space.S] = self.params.total_population
+        self.delta_array[0, self.state_space.S] = (
+            self.params.total_population - self.params.initial_num_E
+            - self.params.initial_num_I - self.params.initial_num_M
+        )
         self.delta_array[0, self.state_space.E] = self.params.initial_num_E
         self.delta_array[0, self.state_space.I] = self.params.initial_num_I
         self.delta_array[0, self.state_space.M] = self.params.initial_num_M
@@ -74,7 +80,10 @@ class Simulator:
         an array that only counts the population that moves *into* each state
         """
         self.delta_plus_array = np.zeros((self.total_days+1, self.state_space.num_states), dtype=float)
-        self.delta_plus_array[0, self.state_space.S] = self.params.total_population
+        self.delta_plus_array[0, self.state_space.S] = (
+            self.params.total_population - self.params.initial_num_E
+            - self.params.initial_num_I - self.params.initial_num_M
+        )
         self.delta_plus_array[0, self.state_space.E] = self.params.initial_num_E
         self.delta_plus_array[0, self.state_space.I] = self.params.initial_num_I
         self.delta_plus_array[0, self.state_space.M] = self.params.initial_num_M
@@ -137,14 +146,14 @@ class Simulator:
         
     def update_S2E(self, T):
         self.S2E = (self.total_array[T-1, self.state_space.S] * self.inf_proba)
-    
-    def update_E2I(self, T):
-        # what do they mean?
+
+        # S can be infected by two sources, E or I
+        # here we decompose the statistics
         self.E_by_E = self.inf_proba_E * self.total_array[T-1, self.state_space.S]
         self.E_by_I = self.inf_proba_I * self.total_array[T-1, self.state_space.S]
-
+        
+    def update_E2I(self, T):
         # each element is the number of infections from E to I at a specific day in the past
-        print('self.delta_plus_array[:, E]', self.delta_plus_array[:, self.state_space.E])
         self.E2I_array = [
             self.pr_EI(t) * self.delta_plus_array[T-t, self.state_space.E]
             for t in self.day_offsets
@@ -160,7 +169,6 @@ class Simulator:
             self.num_in_I[T - self.params.k_days - 1] = 0
         else:
             self.I2O = 0
-        print('I2O', self.I2O)
 
     def update_I2M(self, T):
         # I -> M: infected to hospitized
@@ -217,8 +225,6 @@ class Simulator:
         for trans, v in zip(
                 ('S->E', 'E->I', 'I->O', 'I->M', 'M->O'),
                 (self.S2E, self.E2I, self.I2O, self.I2M, self.M2O)):
-            if np.isclose(v, 0):
-                v = 0
             # transition is non-negative
             assert v >= 0, f'{trans}: {v}'
             if self.verbose > 0:
@@ -269,6 +275,7 @@ class Simulator:
         
     def check_total_arrays(self, T):
         # the population size (regardless of states) should not change
+        print('total_array', self.total_array)
         assert np.isclose(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum()), \
             '{} != {}'.format(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum())
 
@@ -452,6 +459,20 @@ def do_simulation(
 
 
 class SimulatorWithVaccination(Simulator):
+    """
+    assumptions:
+
+    - S->V takes over S->E
+    - V cannot be infected (before vaccination takes effect, the vaccinated population is protected from illness)
+    - V1 becomes EV1 after one day at the earliest (V1 cannot immediately become EV1 on the same day)
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.inf_proba_E = 0.0
+        self.inf_proba_I = 0.0
+        self.inf_proba_EV1 = 0.0
+
     def init_state_space(self):
         self.state_space = STATE_VAC
         self.trans_space = TRANS_VAC
@@ -473,6 +494,7 @@ class SimulatorWithVaccination(Simulator):
         """get infection probability at time T"""
         self.inf_proba_E = min(1, self.total_array[T-1, self.state_space.E] * self.params.alpha_func(T-1))
         self.inf_proba_I = min(1, self.total_array[T-1, self.state_space.I] * self.params.beta_func(T-1))
+        self.inf_proba_EV1 = min(1, self.total_array[T-1, self.state_space.I] * self.params.gamma_func(T-1))
 
         if np.isclose(self.inf_proba_E, 0):
             self.inf_proba_E = 0
@@ -480,22 +502,29 @@ class SimulatorWithVaccination(Simulator):
         if np.isclose(self.inf_proba_I, 0):
             self.inf_proba_I = 0
 
+        if np.isclose(self.inf_proba_EV1, 0):
+            self.inf_proba_EV1 = 0
+            
         # infection by E or I
-        inf_proba_sum = self.inf_proba_E + self.inf_proba_I
+        inf_proba_sum = self.inf_proba_E + self.inf_proba_I + self.inf_proba_EV1
         if inf_proba_sum > 1:
             # bound it from above by 1
             self.inf_proba_E /= inf_proba_sum
             self.inf_proba_I /= inf_proba_sum
+            self.inf_proba_EV1 /= inf_proba_sum
 
-        self.inf_proba = self.inf_proba_E + self.inf_proba_I
+        self.inf_proba = self.inf_proba_E + self.inf_proba_I + self.inf_proba_EV1
         # self.inf_proba = min(1, self.inf_proba_E + self.inf_proba_I)  # bound it by 1
 
         assert self.inf_proba_E >= 0, self.inf_proba_E
         assert self.inf_proba_I >= 0, self.inf_proba_I
+        assert self.inf_proba_EV1 >= 0, self.inf_proba_I
         assert self.inf_proba_E <= 1, \
             (self.total_array[T-1, self.state_space.E], self.params.alpha_func(T-1), self.inf_proba_E)
         assert self.inf_proba_I <= 1, \
             (self.total_array[T-1, self.state_space.I], self.params.beta_func(T-1),  self.inf_proba_I)
+        assert self.inf_proba_EV1 <= 1, \
+            (self.total_array[T-1, self.state_space.EV1], self.params.gamma_func(T-1),  self.inf_proba_EV1)
         assert self.inf_proba <= 1
 
     def update_delta_plus_array(self, T):
@@ -523,8 +552,9 @@ class SimulatorWithVaccination(Simulator):
     def check_and_log(self):
         # print and check the transition information
         for trans, v in zip(
-                ('S->E', 'E->I', 'I->O', 'I->M', 'M->O'),
-                (self.S2E, self.E2I, self.I2O, self.I2M, self.M2O)):
+                ('S->E', 'E->I', 'I->O', 'I->M', 'M->O', 'S->V', 'V->S', 'V->V1', 'V->V2', 'V1->EV1'),
+                (self.S2E, self.E2I, self.I2O, self.I2M, self.M2O,
+                 self.S2V, self.V2S, self.V_to_V1, self.V_to_V2, self.V1_to_EV1)):
             if np.isclose(v, 0):
                 v = 0
             # transition is non-negative
@@ -539,8 +569,15 @@ class SimulatorWithVaccination(Simulator):
     def update_total_array(self, T):
         super().update_total_array(T)
         self.total_array[T, self.state_space.V] = self.total_array[T-1, self.state_space.V] + self.delta_V
-        self.total_array[T, self.state_space.V1] = self.total_array[T-1, self.state_space.V1] + self.delta_V1
-        self.total_array[T, self.state_space.V2] = self.total_array[T-1, self.state_space.V2] + self.delta_V2
+        self.total_array[T, self.state_space.V1] = (
+            self.total_array[T-1, self.state_space.V1] + self.delta_V1
+        )
+        self.total_array[T, self.state_space.V2] = (
+            self.total_array[T-1, self.state_space.V2] + self.delta_V2
+        )
+        self.total_array[T, self.state_space.EV1] = (
+            self.total_array[T-1, self.state_space.EV1] + self.delta_EV1
+        )
 
         self.total_array[T, np.isclose(self.total_array[T, :], 0)] = 0   # it might be < 0
 
@@ -549,6 +586,7 @@ class SimulatorWithVaccination(Simulator):
         self.delta_array[T, self.state_space.V] = self.delta_V
         self.delta_array[T, self.state_space.V1] = self.delta_V1
         self.delta_array[T, self.state_space.V2] = self.delta_V2
+        self.delta_array[T, self.state_space.EV1] = self.delta_EV1
 
     def update_delta_plus_array(self, T):
         super().update_delta_plus_array(T)
@@ -556,6 +594,7 @@ class SimulatorWithVaccination(Simulator):
         self.delta_plus_array[T, self.state_space.V] = self.S2V
         self.delta_plus_array[T, self.state_space.V1] = self.V_to_V1
         self.delta_plus_array[T, self.state_space.V2] = self.V_to_V2
+        self.delta_plus_array[T, self.state_space.EV1] = self.V1_to_EV1
         
     def update_deltas(self, T):
         self.delta_S = - self.S2E - self.S2V + self.V2S
@@ -565,10 +604,16 @@ class SimulatorWithVaccination(Simulator):
         self.delta_O = self.I2O + self.M2O
 
         self.delta_V = self.S2V - self.V2S - self.V_to_V1 - self.V_to_V2
-        self.delta_V1 = self.V_to_V1
+        self.delta_V1 = self.V_to_V1 - self.V1_to_EV1
         self.delta_V2 = self.V_to_V2
+        self.delta_EV1 = self.V1_to_EV1
 
     def update_S2V(self, T):
+        """
+        we assume that S->V rules *over* S->E,
+        meaning that if there are not enough population to be both infected and vaccinated,
+        we choose vaccinated
+        """
         if T >= self.params.vac_time:
             self.S2V = min(
                 self.total_array[T-1, self.state_space.S],
@@ -576,17 +621,24 @@ class SimulatorWithVaccination(Simulator):
             )
         else:
             self.S2V = 0
-        print('self.S2V', self.S2V)
 
-    # def update_days_since_vaccination(self, T):
-    #     """how many days have passed since vaccination starts"""
-    #     self.days_since_vaccination = T - self.params.vac_time
+    def update_S2E(self, T):
+        """
+        we assume that S->V rules *over* S->E,
+        meaning that if there are not enough population to be both infected and vaccinated,
+        we choose vaccinated
+        """
+        self.S2E = max(
+            0,
+            (self.total_array[T-1, self.state_space.S] * self.inf_proba) - self.S2V
+        )
 
-    # def whether_vaccination_takes_effect(self, T):
-    #     """
-    #     return bool, whether vaccination starts to take effect"""
-
-    #     return (days_since_vaccination >= self.params.time_to_take_effect)
+        # S can be infected by three sources, E, I, or EV1
+        # here we decompose the statistics
+        self.E_by_E = self.inf_proba_E * self.total_array[T-1, self.state_space.S]
+        self.E_by_I = self.inf_proba_I * self.total_array[T-1, self.state_space.S]
+        # TODO: should we add the following
+        # self.E_by_EV1 = self.inf_proba_I * self.total_array[T-1, self.state_space.S]
 
     def update_V2S(self, T):
         t = T - self.params.time_to_take_effect
@@ -608,7 +660,10 @@ class SimulatorWithVaccination(Simulator):
             self.V_to_V2 = self.delta_plus_array[t, self.state_space.V] * self.params.v2_proba
         else:
             self.V_to_V2 = 0
-        
+
+    def update_V1_to_EV1(self, T):
+        self.V1_to_EV1 = (self.inf_proba * self.total_array[T-1, self.state_space.V1])
+
     def step(self, T):
         self.update_inf_probas(T)
         self.update_day_offsets(T)
@@ -619,6 +674,7 @@ class SimulatorWithVaccination(Simulator):
         self.update_V2S(T)
         self.update_V_to_V1(T)
         self.update_V_to_V2(T)
+        self.update_V1_to_EV1(T)
 
         # what we have before
         self.update_S2E(T)

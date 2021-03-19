@@ -518,3 +518,95 @@ def test_imprefect_vaccination_2(infectiousless_params):
         sim.delta_plus_array[:, sim.state_space.V2],
         [0, 0, 0, 1, 1, 1, 1/2, 1/2, 1/4]
     )
+
+
+def test_infection_from_E_and_EV1():
+    params = Params(
+        total_population=6,
+        initial_num_E=1,
+        initial_num_I=0,
+        initial_num_M=0,
+        mu_ei=14,  # takes a long time for E to goto I
+        alpha=1.0,  # E is very infectivous
+        beta=0.0
+    )
+
+    params_vac = ParamsVac(
+        vac_time=1,
+        vac_count_per_day=5,
+        gamma=1.0,
+        s_proba=0.0,
+        v2_proba=0.0,
+        v1_proba=1.0,  # all go to V1
+        time_to_take_effect=1,
+        **params.kwargs
+    )
+
+    total_days = 3
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    assert sim.inf_proba_EV1 == 0.0
+    sim.run()
+    assert sim.inf_proba_EV1 > 0.0
+    assert sim.inf_proba == 1.0
+
+    np.testing.assert_almost_equal(
+        sim.total_array[:, sim.state_space.S],
+        [5, 0, 0, 0]
+    )
+    np.testing.assert_almost_equal(
+        sim.delta_array[:, sim.state_space.S],
+        [5, -5, 0, 0]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_plus_array[:, sim.state_space.S],
+        [5, 0, 0, 0]
+    )
+
+    # check V array
+    np.testing.assert_almost_equal(
+        sim.total_array[:, sim.state_space.V],
+        [0, 5, 0, 0]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_array[:, sim.state_space.V],
+        [0, 5, -5, 0]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_plus_array[:, sim.state_space.V],
+        [0, 5, 0, 0]
+    )
+
+    # check V1 array
+    np.testing.assert_almost_equal(
+        sim.total_array[:, sim.state_space.V1],
+        [0, 0, 5, 0]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_array[:, sim.state_space.V1],
+        [0, 0, 5, -5]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_plus_array[:, sim.state_space.V1],
+        [0, 0, 5, 0]
+    )
+
+    # check EV1 array
+    np.testing.assert_almost_equal(
+        sim.total_array[:, sim.state_space.EV1],
+        [0, 0, 0, 5]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_array[:, sim.state_space.EV1],
+        [0, 0, 0, 5]
+    )
+
+    np.testing.assert_almost_equal(
+        sim.delta_plus_array[:, sim.state_space.EV1],
+        [0, 0, 0, 5]
+    )
