@@ -482,10 +482,12 @@ class SimulatorWithVaccination(Simulator):
     """
     assumptions:
 
-    - S->V takes over S->E
-    - V cannot be infected (before vaccination takes effect, the vaccinated population is protected from illness)
-    - V1 becomes EV1 after one day at the earliest (V1 cannot immediately become EV1 on the same day)
-    - V2 stays at V2 (why not go to R)?
+    - S->V is before S->E if both happen on the same day
+    - V cannot be infected
+      before vaccination takes effect, the vaccinated population is protected from illness
+    - there is a short delay in V1 becoming EV1, i.e.
+      V1 becomes EV1 after one day at the earliest (V1 cannot immediately become EV1 on the same day)
+    - V2 does not go to O, in other words, it is distinguished from O
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
