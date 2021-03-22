@@ -4,7 +4,7 @@ from helpers import Params, ParamsVac
 from core import SimulatorWithVaccination
 
 
-VERBOSE = 0
+VERBOSE = 1
 
 @pytest.fixture
 def infectiousless_params():
@@ -921,3 +921,33 @@ def test_EV1_to_O_slower_vaccination():
         sim.delta_plus_array[:, sim.state_space.O],
         [0, 0, 0, 0, 2, 0]
     )        
+
+
+def test_total_infected():
+    params = Params(
+        total_population=5,
+        initial_num_E=1,
+        initial_num_I=0,
+        initial_num_M=0,
+        mu_ei=14,  # takes a long time for E to goto I
+        alpha=1.0,  # E is very infectivous
+        beta=0.0
+    )
+
+    params_vac = ParamsVac(
+        vac_time=1,
+        vac_count_per_day=2,
+        gamma=1.0,
+        s_proba=0.0,
+        v2_proba=0.0,
+        v1_proba=1.0,  # all go to V1
+        time_to_take_effect=1,
+        ev1_to_r_time=100,
+        **params.kwargs
+    )
+
+    total_days = 5
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
+    sim.run()
+
+    assert np.isclose(sim.total_infected, 5)  # EV1 should be counted as well

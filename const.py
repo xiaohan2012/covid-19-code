@@ -15,6 +15,14 @@ class STATE:
     all_states = ('S', 'E', 'I', 'M', 'O', 'H')
     num_states = len(all_states)
     colors = ['green', 'orange', 'red', 'pink', 'gray', 'blue']
+    state2color = {
+        S: 'green',
+        E: 'orange',
+        I: 'red',
+        M: 'pink',
+        O: 'gray',
+        H: 'blue'
+    }
     
 
 class TRANS:
@@ -47,7 +55,19 @@ class STATE_VAC:
     num_states = len(all_states)
 
     colors = ['green', 'orange', 'red', 'pink', 'gray', 'blue']
-    
+
+    state2color = {
+        S: 'green',
+        E: 'orange',
+        I: 'red',
+        M: 'pink',
+        O: 'gray',
+        H: 'blue',
+        V: 'violet',
+        V1: 'magenta',
+        V2: 'cyan',
+        EV1: 'purple'
+    }
 
 class TRANS_VAC(TRANS):
     S2V = 7

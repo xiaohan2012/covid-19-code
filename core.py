@@ -3,6 +3,7 @@ import numpy as np
 from functools import partial
 from datetime import datetime, timedelta
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 from helpers import pr_EI_long, pr_MO_long, pr_IM_long, get_T1_and_T2, R0, T
 from const import STATE, TRANS, STATE_VAC, TRANS_VAC
@@ -44,7 +45,12 @@ class Simulator:
     def init_state_space(self):
         self.state_space = STATE
         self.trans_space = TRANS
-        
+
+        self.infected_states = [
+            self.state_space.M, self.state_space.E, self.state_space.I,
+            self.state_space.O
+        ]
+                
     def init(self):
         self.create_total_array()
         self.create_delta_array()
@@ -287,7 +293,7 @@ class Simulator:
         self.delta_array[T, self.state_space.O] = self.delta_O
         
     def check_total_arrays(self, T):
-        # the population size (regardless of states) should not change
+        # the population size (regardless of state_ids) should not change
         # print('total_array', self.total_array)
         # print('self.total_array[T, :-1]', self.total_array[T, :-1])        
         assert np.isclose(self.total_array[T, :-1].sum(), self.total_array[0, :-1].sum()), \
@@ -308,7 +314,7 @@ class Simulator:
     def update_total_infected(self, T):
         self.total_infected = self.total_array[
             T,
-            [self.state_space.M, self.state_space.E, self.state_space.I, self.state_space.O]
+            self.infected_states
         ].sum()
 
     def update_O_fraction(self, T):
@@ -349,7 +355,7 @@ class Simulator:
 
     def run(self):
         self.end_time = None
-        print('total_days', self.total_days)
+
         iters = range(1, self.total_days+1)
 
         if self.show_bar:
@@ -364,10 +370,10 @@ class Simulator:
 
             # fraction of out-of-system exceeds 0.99
             # the simulation can stop
-            # all states fixed
+            # all state_ids fixed
             if self.O_fraction >= 0.99:
                 self.end_time = T
-                print(f'O fraction  {O_fraction}')
+                print(f'O fraction  {self.O_fraction}')
                 if (T+1) < self.total_array.shape[0]:
                     for s in range(self.state_space.num_states):
                         self.total_array[T+1:, s] = self.total_array[T, s]
@@ -410,7 +416,9 @@ class Simulator:
 
     def get_peak_time(self):
         """when the total infection count peaks"""
-        peak_time = (self.total_array[:, self.state_space.M] + self.total_array[:, self.state_space.I]).argmax()
+        peak_time = (
+            self.total_array[:, self.state_space.M] + self.total_array[:, self.state_space.I]
+        ).argmax()
         return (int(peak_time), self.plus_time_and_to_string(peak_time))
 
     def get_when_dO_gt_dE(self):
@@ -454,7 +462,11 @@ class Simulator:
 
     def get_theoretical_turning_time(self):
         O = self.total_array[:, self.state_space.O]
-        IME = self.total_array[:, self.state_space.I] + self.total_array[:, self.state_space.M] + self.total_array[:, self.state_space.E]
+        IME = (
+            self.total_array[:, self.state_space.I]
+            + self.total_array[:, self.state_space.M]
+            + self.total_array[:, self.state_space.E]
+        )
         
         try:
             turning_time_theory = (O > IME).nonzero()[0].min()
@@ -463,19 +475,30 @@ class Simulator:
         return ((int(turning_time_theory), self.plus_time_and_to_string(turning_time_theory))
                 if turning_time_theory is not None
                 else None)
-        
 
-def do_simulation(
-        total_days, bed_info,
-        params,
-        p0_time,
-        show_bar=False,
-        verbose=0
-):
-    """wrapper function for simulation run, for backward compatability"""
-    sim = Simulator(params, p0_time, total_days, bed_info)
-    ret = sim.run()
-    return ret
+    # plotting related
+    def set_state_ids_to_plot(self, state_ids=None, exclude_ids=None):
+        if state_ids is None:
+            state_ids = np.arange(self.state_space.num_states, dtype=int)
+        if exclude_ids is not None:
+            state_ids = list(set(state_ids) - set(exclude_ids))
+
+        self.state_ids_to_plot = state_ids
+        self.state_names = [self.state_space.all_states[s] for s in self.state_ids_to_plot]
+                
+        self.state2color = self.state_space.state2color
+
+    def plot_total(self, fig=None, ax=None):
+        if fig is None or ax is None:
+            fig, ax = plt.subplots(1, 1)
+
+        for s in self.state_ids_to_plot:
+            ax.plot(self.total_array[:, s], c=self.state2color[s])
+
+        fig.legend(self.state_names)
+        fig.tight_layout()
+        return fig, ax
+
 
 
 class SimulatorWithVaccination(Simulator):
@@ -499,6 +522,12 @@ class SimulatorWithVaccination(Simulator):
     def init_state_space(self):
         self.state_space = STATE_VAC
         self.trans_space = TRANS_VAC
+
+        self.infected_states = [
+            self.state_space.M, self.state_space.E, self.state_space.I,
+            self.state_space.EV1, self.state_space.O
+        ]
+        
 
     def create_total_array(self):
         # the total number of each state at each day
@@ -548,7 +577,10 @@ class SimulatorWithVaccination(Simulator):
             (self.total_array[T-1, self.state_space.I], self.params.beta_func(T-1),  self.inf_proba_I)
         assert self.inf_proba_EV1 <= 1, \
             (self.total_array[T-1, self.state_space.EV1], self.params.gamma_func(T-1),  self.inf_proba_EV1)
-        assert self.inf_proba <= 1
+        # floating point error is possible
+        if self.inf_proba > 1 and np.isclose(self.inf_proba, 1.0):
+            self.inf_proba = 1.0
+        assert self.inf_proba <= 1, self.inf_proba
 
     def update_delta_plus_array(self, T):
         self.delta_plus_array[T, self.state_space.S] = 0
@@ -639,13 +671,19 @@ class SimulatorWithVaccination(Simulator):
         meaning that if there are not enough population to be both infected and vaccinated,
         we choose vaccinated
         """
+        print('T', T, 'vac_time', self.params.vac_time)
         if T >= self.params.vac_time:
             self.S2V = min(
                 self.total_array[T-1, self.state_space.S],
                 self.params.vac_count_per_day
             )
+            print(
+                self.total_array[T-1, self.state_space.S],
+                self.params.vac_count_per_day
+            )
         else:
             self.S2V = 0
+        print('self.S2V {} at {}'.format(self.S2V, T))
 
     def update_S2E(self, T):
         """
@@ -696,7 +734,7 @@ class SimulatorWithVaccination(Simulator):
             self.EV1_to_O = self.delta_plus_array[day, self.state_space.EV1]
         else:
             self.EV1_to_O = 0
-        print('self.EV1_to_O', self.EV1_to_O)
+        # print('self.EV1_to_O', self.EV1_to_O)
 
     def step(self, T):
         self.update_inf_probas(T)
@@ -736,4 +774,18 @@ class SimulatorWithVaccination(Simulator):
 
         self.update_total_infected(T)
         self.update_O_fraction(T)
+        
+
+def do_simulation(
+        total_days, bed_info,
+        params,
+        p0_time,
+        show_bar=False,
+        verbose=0
+):
+    """wrapper function for simulation run, for backward compatability"""
+    sim = Simulator(params, p0_time, total_days, bed_info)
+    ret = sim.run()
+    return ret
+
         
