@@ -616,18 +616,20 @@ class SimulatorWithVaccination(Simulator):
         self.delta_plus_array[T, self.state_space.V1] = self.V_to_V1
         self.delta_plus_array[T, self.state_space.V2] = self.V_to_V2
         self.delta_plus_array[T, self.state_space.EV1] = self.V1_to_EV1
+
+        self.delta_plus_array[T, self.state_space.O] = self.M2O + self.I2O + self.EV1_to_O
         
     def update_deltas(self, T):
         self.delta_S = - self.S2E - self.S2V + self.V2S
         self.delta_E = self.S2E - self.E2I
         self.delta_I = self.E2I - self.I2M - self.I2O
         self.delta_M = self.I2M - self.M2O
-        self.delta_O = self.I2O + self.M2O
+        self.delta_O = self.I2O + self.M2O + self.EV1_to_O
 
         self.delta_V = self.S2V - self.V2S - self.V_to_V1 - self.V_to_V2
         self.delta_V1 = self.V_to_V1 - self.V1_to_EV1
         self.delta_V2 = self.V_to_V2
-        self.delta_EV1 = self.V1_to_EV1
+        self.delta_EV1 = self.V1_to_EV1 - self.EV1_to_O
 
     def update_S2V(self, T):
         """
@@ -685,6 +687,15 @@ class SimulatorWithVaccination(Simulator):
     def update_V1_to_EV1(self, T):
         self.V1_to_EV1 = (self.inf_proba * self.total_array[T-1, self.state_space.V1])
 
+    def update_EV1_to_O(self, T):
+        # all EV1 on the day below go to O
+        day = T - self.params.ev1_to_r_time
+        if day >= 0:
+            self.EV1_to_O = self.delta_plus_array[day, self.state_space.EV1]
+        else:
+            self.EV1_to_O = 0
+        print('self.EV1_to_O', self.EV1_to_O)
+
     def step(self, T):
         self.update_inf_probas(T)
         self.update_day_offsets(T)
@@ -696,6 +707,7 @@ class SimulatorWithVaccination(Simulator):
         self.update_V_to_V1(T)
         self.update_V_to_V2(T)
         self.update_V1_to_EV1(T)
+        self.update_EV1_to_O(T)
 
         # what we have before
         self.update_S2E(T)
@@ -703,7 +715,6 @@ class SimulatorWithVaccination(Simulator):
         self.update_I2O(T)
         self.update_M2O(T)
         self.update_I2M(T)
-
 
         self.update_delta_plus_array(T)
         self.update_I_array(T)
