@@ -142,7 +142,10 @@ class Simulator:
 
     def update_day_offsets(self, T):
         # previous days to consider for E-I
-        self.day_offsets = [t for t in range(1, self.params.k_days+1) if T - t >= 0]
+        self.day_offsets = np.array(
+            [t for t in range(1, self.params.k_days+1) if T - t >= 0],
+            dtype=int
+        )
         
     def update_S2E(self, T):
         self.S2E = (self.total_array[T-1, self.state_space.S] * self.inf_proba)
@@ -164,9 +167,10 @@ class Simulator:
     def update_I2O(self, T):
         # remaining I exceeding k_days go to O
         # (I -> O)
-        if T - self.params.k_days - 1 >= 0:
-            self.I2O = self.num_in_I[T - self.params.k_days - 1]
-            self.num_in_I[T - self.params.k_days - 1] = 0
+        day = T - self.params.k_days - 1
+        if day >= 0:
+            self.I2O = self.num_in_I[day]
+            self.num_in_I[day] = 0
         else:
             self.I2O = 0
 
@@ -180,21 +184,25 @@ class Simulator:
         )
         # initial value for I2M, before considering hospital capacity
         self.I2M = np.sum(self.I2M_array)
+        
+        if self.I2M > 0:  # if it is possible that some I go to M
+            # some special attention regarding I -> M or O (due to hospital capacity)
+            # some patients need to stay at home
+            # when there are more people that needs to go to hospital than the hospital capacity
+            remaining_hospital_capacity = (
+                self.total_array[T-1, self.state_space.H]
+                - self.total_array[T-1, self.state_space.M]
+            )
+            if (self.I2M - self.M2O) >= remaining_hospital_capacity:
+                # if hospital is out of capcity
+                # NOTE: I2M is changed here!
+                self.I2M = remaining_hospital_capacity + self.M2O  # this many I goes to hospital
+                # I population on each past day have equal probability of going to M
+                # therefore, we rescale I2M_array here
+                self.I2M_array = self.I2M / np.sum(self.I2M_array) * self.I2M_array
 
-        # some special attention regarding I -> M or O (due to hospital capacity)
-        # some patients need to stay at home
-        # when there are more people that needs to go to hospital than the hospital capacity
-        remaining_hospital_capacity = (
-            self.total_array[T-1, self.state_space.H]
-            - self.total_array[T-1, self.state_space.M]
-        )
-        if (self.I2M - self.M2O) >= remaining_hospital_capacity:
-            # if hospital is out of capcity
-            # NOTE: I2M is change here!
-            self.I2M = remaining_hospital_capacity + self.M2O  # this many I goes to hospital
-            self.I2M_array = self.I2M / np.sum(self.I2M_array) * self.I2M_array
-            if self.verbose > 0:
-                print('hospital is full')
+                if self.verbose > 0:
+                    print('hospital is full')
 
         # if hospital is full now
         # I -> M is not allowed (no I goes to hospital)
@@ -215,14 +223,13 @@ class Simulator:
         self.delta_plus_array[T, self.state_space.E] = self.S2E
         self.delta_plus_array[T, self.state_space.I] = self.E2I
 
-
         self.delta_plus_array[T, self.state_space.M] = self.I2M  # bound self.I2M by remaining capacity
         self.delta_plus_array[T, self.state_space.O] = self.M2O + self.I2O
 
     def update_I_array(self, T):
         # number of I on each day needs to be adjusted (due to I -> M)
         self.num_in_I[T] = self.E2I
-        self.num_in_I[T - np.array(self.day_offsets, dtype=int)] -= self.I2M_array
+        self.num_in_I[T - self.day_offsets] -= self.I2M_array
 
     def check_and_log(self):
         # print and check the transition information
@@ -299,10 +306,16 @@ class Simulator:
             print(self.total_array[T, :].sum())
     
     def update_total_infected(self, T):
-        self.total_infected = self.total_array[T, [self.state_space.M, self.state_space.E, self.state_space.I, self.state_space.O]].sum()
+        self.total_infected = self.total_array[
+            T,
+            [self.state_space.M, self.state_space.E, self.state_space.I, self.state_space.O]
+        ].sum()
 
     def update_O_fraction(self, T):
-        self.O_fraction = (self.total_array[T, self.state_space.O] / self.total_infected)
+        if self.total_infected > 0:
+            self.O_fraction = (self.total_array[T, self.state_space.O] / self.total_infected)
+        else:
+            self.O_fraction = 0
         
     def step(self, T):
         self.update_inf_probas(T)

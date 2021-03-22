@@ -4,6 +4,8 @@ from helpers import Params, ParamsVac
 from core import SimulatorWithVaccination
 
 
+VERBOSE = 0
+
 @pytest.fixture
 def infectiousless_params():
     return Params(
@@ -33,7 +35,7 @@ def test_prefect_vaccination_1(infectiousless_params):
 
     total_days = 5
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -116,7 +118,7 @@ def test_prefect_vaccination_2(infectiousless_params):
 
     total_days = 5
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -200,7 +202,7 @@ def test_worst_possible_vaccination_1(infectiousless_params):
 
     total_days = 6
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -283,7 +285,7 @@ def test_worst_possible_vaccination_2(infectiousless_params):
 
     total_days = 6
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -368,7 +370,7 @@ def test_imprefect_vaccination_1(infectiousless_params):
 
     total_days = 5
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -454,7 +456,7 @@ def test_imprefect_vaccination_2(infectiousless_params):
 
     total_days = 8
 
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     sim.run()
     # check S array
     np.testing.assert_almost_equal(
@@ -543,7 +545,7 @@ def test_infection_from_E_and_EV1():
     )
 
     total_days = 3
-    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=1)
+    sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     assert sim.inf_proba_EV1 == 0.0
     sim.run()
     assert sim.inf_proba_EV1 > 0.0

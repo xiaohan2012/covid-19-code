@@ -328,13 +328,21 @@ def get_T1_and_T2(I2OM_by_days, E2I_by_days):
         [[num, d] for num, d in zip(I2OM_by_days, range(1, len(I2OM_by_days) + 1))]
     )
     total_num_I = I_num_and_day_array[:, 0].sum()
-    mean_I_days = (I_num_and_day_array[:, 0] * I_num_and_day_array[:, 1]).sum() / total_num_I
+
+    if total_num_I > 0:
+        mean_I_days = (I_num_and_day_array[:, 0] * I_num_and_day_array[:, 1]).sum() / total_num_I
+    else:
+        mean_I_days = float("nan")
     
     E_num_and_day_array = np.array(
         [[num, d] for num, d in zip(E2I_by_days, range(1, len(E2I_by_days) + 1))]
     )
     total_num_E = E_num_and_day_array[:, 0].sum()
-    mean_E_days = (E_num_and_day_array[:, 0] * E_num_and_day_array[:, 1]).sum() / total_num_E
+
+    if total_num_E > 0:
+        mean_E_days = (E_num_and_day_array[:, 0] * E_num_and_day_array[:, 1]).sum() / total_num_E
+    else:
+        mean_E_days = float("nan")
 
     return mean_E_days, mean_I_days
 
