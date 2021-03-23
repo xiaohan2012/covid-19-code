@@ -309,7 +309,7 @@ class Simulator:
         if self.verbose > 0:
             for s, v in zip(self.state_space.all_states, self.total_array[T, :]):
                 print(f'{s}: {v}')
-            print(self.total_array[T, :].sum())
+            # print(self.total_array[T, :].sum())
     
     def update_total_infected(self, T):
         self.total_infected = self.total_array[
@@ -322,7 +322,7 @@ class Simulator:
             self.O_fraction = (self.total_array[T, self.state_space.O] / self.total_infected)
         else:
             self.O_fraction = 0
-        
+
     def step(self, T):
         self.update_inf_probas(T)
         self.update_day_offsets(T)
@@ -364,7 +364,7 @@ class Simulator:
         for T in iters:
             if self.verbose > 0:
                 print('-' * 10)
-                print(f'at iteration {T}')
+                print(f'on day {T}')
 
             self.step(T)
 
@@ -527,7 +527,6 @@ class SimulatorWithVaccination(Simulator):
             self.state_space.M, self.state_space.E, self.state_space.I,
             self.state_space.EV1, self.state_space.O
         ]
-        
 
     def create_total_array(self):
         # the total number of each state at each day
@@ -546,7 +545,7 @@ class SimulatorWithVaccination(Simulator):
         """get infection probability at time T"""
         self.inf_proba_E = min(1, self.total_array[T-1, self.state_space.E] * self.params.alpha_func(T-1))
         self.inf_proba_I = min(1, self.total_array[T-1, self.state_space.I] * self.params.beta_func(T-1))
-        self.inf_proba_EV1 = min(1, self.total_array[T-1, self.state_space.I] * self.params.gamma_func(T-1))
+        self.inf_proba_EV1 = min(1, self.total_array[T-1, self.state_space.EV1] * self.params.gamma_func(T-1))
 
         if np.isclose(self.inf_proba_E, 0):
             self.inf_proba_E = 0
@@ -620,6 +619,8 @@ class SimulatorWithVaccination(Simulator):
         for v in [self.S2E, self.E2I, self.I2M, self.I2O, self.M2O]:
             assert not np.isnan(v)
             assert not np.isinf(v)
+        if self.verbose > 0:
+            print('infection probability:', self.inf_proba)
 
     def update_total_array(self, T):
         super().update_total_array(T)
@@ -671,19 +672,19 @@ class SimulatorWithVaccination(Simulator):
         meaning that if there are not enough population to be both infected and vaccinated,
         we choose vaccinated
         """
-        print('T', T, 'vac_time', self.params.vac_time)
+        # print('T', T, 'vac_time', self.params.vac_time)
         if T >= self.params.vac_time:
             self.S2V = min(
                 self.total_array[T-1, self.state_space.S],
                 self.params.vac_count_per_day
             )
-            print(
-                self.total_array[T-1, self.state_space.S],
-                self.params.vac_count_per_day
-            )
+            # print(
+            #     self.total_array[T-1, self.state_space.S],
+            #     self.params.vac_count_per_day
+            # )
         else:
             self.S2V = 0
-        print('self.S2V {} at {}'.format(self.S2V, T))
+        # print('self.S2V {} at {}'.format(self.S2V, T))
 
     def update_S2E(self, T):
         """
@@ -716,7 +717,7 @@ class SimulatorWithVaccination(Simulator):
             self.V_to_V1 = self.delta_plus_array[t, self.state_space.V] * self.params.v1_proba
         else:
             self.V_to_V1 = 0
-        
+
     def update_V_to_V2(self, T):
         t = T - self.params.time_to_take_effect
         if t >= self.params.vac_time:

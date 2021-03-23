@@ -529,7 +529,7 @@ def test_infection_from_E_and_EV1():
         initial_num_I=0,
         initial_num_M=0,
         mu_ei=14,  # takes a long time for E to goto I
-        alpha=1.0,  # E is very infectivous
+        alpha=10.0,  # E is very infectivous
         beta=0.0
     )
 
@@ -548,6 +548,7 @@ def test_infection_from_E_and_EV1():
     sim = SimulatorWithVaccination(params_vac, total_days=total_days, verbose=VERBOSE)
     assert sim.inf_proba_EV1 == 0.0
     sim.run()
+    sim.update_inf_probas(total_days + 1)
     assert sim.inf_proba_EV1 > 0.0
     assert sim.inf_proba == 1.0
 
@@ -713,7 +714,7 @@ def test_EV1_to_O():
         initial_num_I=0,
         initial_num_M=0,
         mu_ei=14,  # takes a long time for E to goto I
-        alpha=1.0,  # E is very infectivous
+        alpha=10.,  # E is very infectivous
         beta=0.0
     )
 
